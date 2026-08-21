@@ -1,0 +1,1 @@
+Remote access to the corporate network requires VPN connectivity and multi-factor authentication. Users must never share their authentication credentials.

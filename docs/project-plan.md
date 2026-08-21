@@ -201,12 +201,12 @@ Top-K Relevant Chunks
 ## 1.7 RAG Generation
 
 - 🟡 Azure OpenAI chat model deployment
-- ⬜ RAG service
-- ⬜ Retrieve relevant chunks
-- ⬜ Construct grounded context
-- ⬜ System prompt
-- ⬜ Generate answer from retrieved context
-- ⬜ Refuse / qualify when context is insufficient
+- ✅ RAG service
+- ✅ Retrieve relevant chunks
+- ✅ Construct grounded context
+- ✅ System prompt
+- ✅ Generate answer from retrieved context
+- ✅ Refuse / qualify when context is insufficient
 
 Target flow:
 
@@ -226,11 +226,11 @@ Grounded Answer
 
 ## 1.8 Sources & Citations
 
-- ⬜ Return source metadata with each answer
-- ⬜ `document_id`
-- ⬜ `filename`
-- ⬜ `chunk_index`
-- ⬜ Retrieval score where useful
+- ✅ Return source metadata with each answer
+- ✅ `document_id`
+- ✅ `filename`
+- ✅ `chunk_index`
+- ✅ Retrieval score where useful
 
 Target response:
 
@@ -251,11 +251,11 @@ Target response:
 
 Keep coverage focused on high-value behavior.
 
-- ⬜ Tenant A must never retrieve Tenant B chunks
-- ⬜ Invalid documents must fail safely
-- ⬜ Retrieval must return relevant results
-- ⬜ RAG response must include sources
-- ⬜ CI must remain green
+- ✅ Tenant A must never retrieve Tenant B chunks
+- ✅ Invalid documents must fail safely
+- ✅ Retrieval must return relevant results
+- ✅ RAG response must include sources
+- ✅ CI must remain green
 
 ## Sprint 1 Definition of Done
 

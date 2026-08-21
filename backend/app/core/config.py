@@ -23,6 +23,16 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    document_storage_path: str = "storage/documents"
+    max_upload_size_mb: int = 10
+    chunk_size: int = 1000
+    chunk_overlap: int = 150
+
+    qdrant_collection_name: str = "document_chunks"
+
+    azure_openai_embedding_deployment: str | None = None
+    azure_openai_api_version: str = "2024-02-01"
+
 
 @lru_cache
 def get_settings() -> Settings:

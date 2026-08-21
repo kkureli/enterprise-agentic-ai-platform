@@ -1,0 +1,1 @@
+Machine maintenance must be performed every 500 operating hours. Before maintenance begins, the machine must be shut down and isolated from the power source.

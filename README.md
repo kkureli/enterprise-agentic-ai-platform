@@ -6,7 +6,8 @@ The project is being developed incrementally with a focus on software engineerin
 
 ## Current Status
 
-**Sprint 0 — Repository & Architecture Foundation: completed**
+**Sprint 0 — Repository & Architecture Foundation: completed**  
+**Sprint 1 — Enterprise Knowledge Ingestion & RAG v1: completed**
 
 Implemented so far:
 
@@ -15,16 +16,47 @@ Implemented so far:
 - PostgreSQL
 - Alembic migrations
 - Redis infrastructure
-- Qdrant infrastructure
+- Qdrant vector database
 - Tenant model and REST API
 - User model and tenant relationship
-- Tenant-scoped user queries
+- Tenant-scoped data isolation
+- Document model and upload API
+- Local document storage with SHA-256 checksums
+- PDF and TXT parsing
+- Recursive document chunking with LangChain
+- Azure OpenAI embeddings
+- Dense vector indexing in Qdrant
+- Tenant-filtered semantic retrieval
+- Retrieval REST API
+- Azure OpenAI chat model integration
+- Grounded RAG generation
+- LLM-selected source citations
+- Retrieved-chunk inspection for debugging and evaluation
 - Health and readiness endpoints
 - Integration tests with a dedicated PostgreSQL test database
 - Ruff linting and formatting
 - GitHub Actions CI
 
-RAG, agent orchestration, MCP integrations, evaluation pipelines, and cloud deployment are planned for upcoming sprints and are not yet implemented.
+Current end-to-end RAG flow:
+
+```text
+Document Upload
+      ↓
+Parsing
+      ↓
+Chunking
+      ↓
+Azure OpenAI Embeddings
+      ↓
+Qdrant Indexing
+      ↓
+Tenant-Scoped Retrieval
+      ↓
+Azure OpenAI Chat Model
+      ↓
+Grounded Answer
+      ↓
+Selected Sources + Retrieved Chunks
 
 ## Architecture
 
