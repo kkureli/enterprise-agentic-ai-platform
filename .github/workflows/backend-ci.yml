@@ -14,8 +14,8 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
-    env: DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/agentic_ai_test
-
+    env:
+      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/agentic_ai_test"
     services:
       postgres:
         image: postgres:16-alpine
