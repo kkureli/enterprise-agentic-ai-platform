@@ -57,6 +57,12 @@ Azure OpenAI Chat Model
 Grounded Answer
       ↓
 Selected Sources + Retrieved Chunks
+```
+
+Advanced hybrid retrieval, reranking, retrieval evaluation, LangGraph agent
+orchestration, MCP integrations, human-in-the-loop workflows, observability,
+frontend development, and cloud deployment are planned for upcoming sprints.
+
 
 ## Architecture
 
