@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     debug: bool = True
     api_v1_prefix: str = "/api/v1"
 
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/agentic_ai"
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/agentic_ai"
     redis_url: str = "redis://localhost:6379"
     qdrant_url: str = "http://localhost:6333"
 
