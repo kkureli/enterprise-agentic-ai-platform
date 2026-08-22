@@ -13,6 +13,7 @@ from app.schemas.rag import (
     RagSourceRead,
 )
 from app.services.rag_service import answer_question
+from app.services.retrieval_service import RetrievalFilters
 
 router = APIRouter(
     prefix="/tenants/{tenant_id}/rag",
@@ -41,6 +42,11 @@ async def rag(
         tenant_id=tenant_id,
         question=payload.question,
         limit=payload.limit,
+        filters=RetrievalFilters(
+            document_id=payload.document_id,
+            filename=payload.filename,
+        ),
+        retrieval_mode=payload.retrieval_mode,
     )
 
     return RagResponse(

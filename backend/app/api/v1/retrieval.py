@@ -7,7 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.models.tenant import Tenant
 from app.schemas.retrieval import RetrievalRequest, RetrievedChunkRead
-from app.services.retrieval_service import retrieve_chunks
+from app.services.retrieval_service import (
+    RetrievalFilters,
+    retrieve_chunks,
+)
 
 router = APIRouter(
     prefix="/tenants/{tenant_id}/retrieval",
@@ -36,6 +39,10 @@ async def retrieve(
         tenant_id=tenant_id,
         query=payload.query,
         limit=payload.limit,
+        filters=RetrievalFilters(
+            document_id=payload.document_id,
+            filename=payload.filename,
+        ),
     )
 
     return [

@@ -27,8 +27,22 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 10
     chunk_size: int = 1000
     chunk_overlap: int = 150
+    dense_retrieval_weight: float = 0.7
+    sparse_retrieval_weight: float = 0.3
+    dense_identifier_weight: float = 0.5
+    sparse_identifier_weight: float = 0.5
+    rrf_k: int = 60
+    hybrid_rank_weight: float = 0.7
+    reranker_rank_weight: float = 0.3
+    final_rrf_k: int = 60
+    multi_query_rrf_k: int = 60
+    original_query_weight: float = 1.0
+    expanded_query_weight: float = 0.7
+    query_expansion_max_count: int = 3
+    retrieval_candidate_multiplier: int = 2
+    retrieval_candidate_min: int = 10
 
-    qdrant_collection_name: str = "document_chunks"
+    qdrant_collection_name: str = "document_chunks_v2"
 
     azure_openai_embedding_deployment: str | None = None
     azure_openai_api_version: str = "2024-02-01"

@@ -1,0 +1,15 @@
+{"id":"equipment_exact_01","query":"What does error code AX-4317 indicate?","query_type":"exact_identifier","relevant_documents":["equipment-errors.txt"]}
+{"id":"equipment_semantic_01","query":"What problem causes the AX-4317 machine error?","query_type":"semantic","relevant_documents":["equipment-errors.txt"]}
+{"id":"equipment_action_01","query":"What should technicians inspect before restarting a machine with hydraulic pressure loss?","query_type":"semantic","relevant_documents":["equipment-errors.txt"]}
+{"id":"maintenance_interval_01","query":"How often should preventive maintenance be performed?","query_type":"semantic","relevant_documents":["maintenance-policy.txt","maintenance-real.txt"]}
+{"id":"maintenance_interval_02","query":"When is scheduled machine servicing required?","query_type":"semantic_paraphrase","relevant_documents":["maintenance-policy.txt","maintenance-real.txt"]}
+{"id":"maintenance_keyword_01","query":"machine maintenance 500 operating hours","query_type":"keyword","relevant_documents":["maintenance-policy.txt","maintenance-real.txt"]}
+{"id":"maintenance_safety_01","query":"What must be done to the machine power before maintenance begins?","query_type":"semantic","relevant_documents":["maintenance-policy.txt","maintenance-real.txt"]}
+{"id":"vacation_days_01","query":"How many paid vacation days do employees receive?","query_type":"semantic","relevant_documents":["vacation-policy.txt"]}
+{"id":"vacation_days_02","query":"What is the annual paid leave entitlement?","query_type":"semantic_paraphrase","relevant_documents":["vacation-policy.txt"]}
+{"id":"vacation_approval_01","query":"Who must approve an employee's leave request?","query_type":"semantic","relevant_documents":["vacation-policy.txt"]}
+{"id":"network_remote_01","query":"How should employees access the corporate network remotely?","query_type":"semantic","relevant_documents":["network-security.txt"]}
+{"id":"network_remote_02","query":"What security controls are required for remote corporate access?","query_type":"semantic_paraphrase","relevant_documents":["network-security.txt"]}
+{"id":"network_keyword_01","query":"VPN MFA remote access","query_type":"keyword","relevant_documents":["network-security.txt"]}
+{"id":"network_credentials_01","query":"Are users allowed to share their authentication credentials?","query_type":"semantic","relevant_documents":["network-security.txt"]}
+{"id":"equipment_keyword_01","query":"AX-4317 hydraulic pressure sensor","query_type":"keyword","relevant_documents":["equipment-errors.txt"]}

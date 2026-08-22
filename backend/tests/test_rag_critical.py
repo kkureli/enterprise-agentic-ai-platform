@@ -25,11 +25,14 @@ async def test_retrieval_is_tenant_scoped(monkeypatch):
             *,
             collection_name,
             query,
+            using,
             query_filter,
             limit,
             with_payload,
         ):
             self.query_filter = query_filter
+            self.using = using
+
             return FakeResult()
 
         async def close(self):
@@ -105,6 +108,8 @@ async def test_rag_response_contains_sources_and_retrieved_chunks(
         tenant_id,
         question,
         limit,
+        filters=None,
+        retrieval_mode="standard",
     ):
         return RagResult(
             answer="Employees receive 20 working days of paid annual leave.",
@@ -157,3 +162,24 @@ async def test_rag_response_contains_sources_and_retrieved_chunks(
     assert data["sources"][0]["filename"] == "vacation-policy.txt"
 
     assert len(data["retrieved_chunks"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_invalid_retrieval_mode_returns_422(client):
+    tenant_response = await client.post(
+        "/api/v1/tenants",
+        json={"name": "RAG Mode Test Tenant"},
+    )
+
+    tenant_id = tenant_response.json()["id"]
+
+    response = await client.post(
+        f"/api/v1/tenants/{tenant_id}/rag",
+        json={
+            "question": "How much annual leave do employees receive?",
+            "limit": 3,
+            "retrieval_mode": "experimental",
+        },
+    )
+
+    assert response.status_code == 422

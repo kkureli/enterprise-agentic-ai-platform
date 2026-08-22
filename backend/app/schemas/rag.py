@@ -1,16 +1,19 @@
+from typing import Literal
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
 class RagRequest(BaseModel):
-    question: str = Field(
-        min_length=2,
-        max_length=2000,
-    )
+    question: str = Field(min_length=2, max_length=2000)
+    limit: int = Field(default=5, ge=1, le=10)
+    retrieval_mode: Literal["standard", "advanced"] = "standard"
 
-    limit: int = Field(
-        default=5,
-        ge=1,
-        le=10,
+    document_id: UUID | None = None
+    filename: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=512,
     )
 
 

@@ -1,0 +1,1 @@
+Equipment error code AX-4317 indicates hydraulic pressure loss. Technicians must inspect the hydraulic circuit and pressure sensor before restarting the machine.

@@ -4,7 +4,8 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.services.llm_service import get_chat_model
-from app.services.retrieval_service import RetrievedChunk, retrieve_chunks
+from app.services.rag_retrieval_service import RetrievalMode, retrieve_for_rag_mode
+from app.services.retrieval_service import RetrievalFilters, RetrievedChunk
 
 SYSTEM_PROMPT = """
 You are an enterprise knowledge assistant.
@@ -67,11 +68,15 @@ async def answer_question(
     tenant_id: UUID,
     question: str,
     limit: int = 5,
+    filters: RetrievalFilters | None = None,
+    retrieval_mode: RetrievalMode = "standard",
 ) -> RagResult:
-    chunks = await retrieve_chunks(
+    chunks = await retrieve_for_rag_mode(
         tenant_id=tenant_id,
         query=question,
         limit=limit,
+        filters=filters,
+        mode=retrieval_mode,
     )
 
     if not chunks:

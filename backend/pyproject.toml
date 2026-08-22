@@ -13,6 +13,7 @@ dependencies = [
     "asyncpg>=0.31.0",
     "email-validator>=2.3.0",
     "fastapi>=0.141.1",
+    "fastembed>=0.8.0",
     "greenlet>=3.5.5",
     "langchain-openai>=1.6.0",
     "langchain-text-splitters>=1.1.2",
@@ -22,6 +23,7 @@ dependencies = [
     "python-multipart>=0.0.32",
     "qdrant-client>=1.19.0",
     "redis>=8.1.0",
+    "sentence-transformers>=6.0.0",
     "sqlalchemy>=2.0.52",
     "uvicorn[standard]>=0.52.4",
 ]

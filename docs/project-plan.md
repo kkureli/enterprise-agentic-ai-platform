@@ -4,6 +4,8 @@ This document tracks the implementation roadmap for the **Enterprise Agentic AI 
 
 The project is intentionally built in incremental sprints. A capability is only marked as complete after it is implemented and verified locally.
 
+**Current progress:** Sprint 0 ✅ · Sprint 1 ✅ · Sprint 2 ✅ · Sprint 3+ ⬜ planned
+
 ## Status Legend
 
 - ✅ Completed
@@ -200,7 +202,7 @@ Top-K Relevant Chunks
 
 ## 1.7 RAG Generation
 
-- 🟡 Azure OpenAI chat model deployment
+- ✅ Azure OpenAI chat model deployment
 - ✅ RAG service
 - ✅ Retrieve relevant chunks
 - ✅ Construct grounded context
@@ -285,48 +287,144 @@ Answer returned with sources
 
 # Sprint 2 — Advanced Retrieval & Evaluation
 
+**Status: ✅ Completed**
+
 **Goal:** Upgrade basic dense RAG into a measurable production retrieval system.
 
-## Retrieval
+## 2.1 Hybrid Retrieval
 
-- ⬜ Sparse / lexical retrieval
-- ⬜ Dense + sparse hybrid retrieval
-- ⬜ Reciprocal Rank Fusion (RRF)
-- ⬜ Cross-encoder reranking
-- ⬜ Retrieval configuration tuning
-- ⬜ Metadata filtering improvements
+- ✅ Dense retrieval with Azure OpenAI embeddings
+- ✅ Sparse / lexical retrieval with FastEmbed BM25
+- ✅ Dense + sparse hybrid retrieval
+- ✅ Weighted Reciprocal Rank Fusion (RRF)
+- ✅ Query-aware dense/sparse weighting
+  - default: dense `0.7` / sparse `0.3`
+  - strong identifier queries (e.g. `AX-4317`): dense `0.5` / sparse `0.5`
+- ✅ Tenant-scoped Qdrant filtering
+- ✅ Optional metadata filters (`document_id`, `filename`)
+- ✅ Centralized retrieval settings in `app/core/config.py`
 
-Target architecture:
+Chunk identity remains `(document_id, chunk_index)`.
+
+## 2.2 Reranking & Final Fusion
+
+- ✅ CrossEncoder reranking (`cross-encoder/ms-marco-MiniLM-L-6-v2`)
+- ✅ Retrieval-aware final rank fusion
+  - hybrid / multi-query base ranking is not replaced by CrossEncoder alone
+  - base ranking + CrossEncoder ranking are fused with weighted rank-based RRF
+- ✅ Raw hybrid scores are never mixed with raw CrossEncoder scores
+
+## 2.3 Multi-Query Retrieval
+
+- ✅ LLM query expansion (up to 3 alternatives; original query preserved)
+- ✅ Important identifiers preserved during expansion
+- ✅ Multi-query hybrid retrieval
+- ✅ Candidate deduplication
+- ✅ Query-level weighted RRF
+  - original query weighted higher than expanded variants
+- ✅ CrossEncoder always scores against the **original user query**
+
+## 2.4 Production RAG Modes
+
+Request field: `retrieval_mode` on `POST /api/v1/tenants/{tenant_id}/rag`
+
+| Mode | Default | Path |
+|------|---------|------|
+| `standard` | yes | Hybrid → CrossEncoder → final rank fusion → Top-K → LLM |
+| `advanced` | no | Query expansion → Multi-Query Hybrid → CrossEncoder (original query) → final fusion → Top-K → LLM |
+
+Invalid modes are rejected with HTTP 422.
+
+### Standard path
 
 ```text
-                   Query
-                     │
-           ┌─────────┴─────────┐
-           ▼                   ▼
-     Dense Retrieval     Sparse Retrieval
-           │                   │
-           └─────────┬─────────┘
-                     ▼
-                    RRF
-                     ↓
-                  Reranker
-                     ↓
-                   Top-K
+Query
+  ↓
+Hybrid Retrieval (dense + sparse, query-aware weights, weighted RRF)
+  ↓
+CrossEncoder
+  ↓
+Rank Fusion (base ranking + reranker ranking)
+  ↓
+Top-K
+  ↓
+LLM grounded answer
 ```
 
-## Evaluation
+### Advanced path
 
-- ⬜ Golden retrieval dataset
-- ⬜ Recall@K
-- ⬜ MRR
-- ⬜ nDCG
-- ⬜ Compare dense vs hybrid
-- ⬜ Compare hybrid vs hybrid + reranker
-- ⬜ Retrieval regression checks
+```text
+Query
+  ↓
+Query Expansion
+  ↓
+Multi-Query Hybrid Retrieval
+  ↓
+Multi-Query RRF + deduplication
+  ↓
+CrossEncoder (original user query)
+  ↓
+Final Rank Fusion
+  ↓
+Top-K
+  ↓
+LLM grounded answer
+```
+
+## 2.5 Retrieval Evaluation
+
+- ✅ Golden retrieval dataset: `evals/datasets/retrieval_golden.jsonl`
+- ✅ Metrics: Recall@K, MRR, nDCG@K
+- ✅ Strategy comparison runner: `evals/retrieval/run_evaluation.py`
+- ✅ Persisted benchmark artifact: `evals/results/retrieval_results.json`
+
+Evaluated strategies:
+
+- Dense
+- Sparse
+- Hybrid
+- Hybrid + Reranker
+- Multi-Query Hybrid
+- Multi-Query + Reranker
+
+### Sprint 2 benchmark (from `evals/results/retrieval_results.json`)
+
+Evaluated at `2026-08-22T18:12:54.291506+00:00` · `eval_k = 3` · `15` golden queries.
+
+| Strategy | Recall@3 | MRR | nDCG@3 |
+|----------|----------|-----|--------|
+| Dense | 1.0000 | 1.0000 | 1.0000 |
+| Sparse | 0.9333 | 0.9000 | 0.9087 |
+| Hybrid | 1.0000 | 1.0000 | 0.9946 |
+| Hybrid + Reranker | 1.0000 | 1.0000 | 0.9946 |
+| Multi-Query Hybrid | 1.0000 | 1.0000 | 1.0000 |
+| Multi-Query + Reranker | 1.0000 | 1.0000 | 1.0000 |
+
+> Note: this evaluation corpus is intentionally small and should not be presented as a large-scale production benchmark. It is a reproducible Sprint 2 portfolio artifact for ranking behavior and regression visibility.
+
+## Sprint 2 Definition of Done
+
+Sprint 2 is complete when:
+
+```text
+Dense / Sparse / Hybrid retrieval works under tenant isolation
+        ↓
+Query-aware hybrid weighting and RRF are configurable
+        ↓
+CrossEncoder + final rank fusion protects against reranker regressions
+        ↓
+Multi-query advanced path is available via retrieval_mode
+        ↓
+Retrieval metrics are measurable and persisted
+```
+
+Remaining regression-gate automation (CI-enforced retrieval checks) is deferred to later reliability work and is not required for Sprint 2 completion.
 
 ---
 
 # Sprint 3 — LangGraph Agent Orchestration
+
+**Status: ⬜ Planned (not implemented)**
 
 **Goal:** Move from single RAG calls to stateful agent workflows.
 
@@ -487,12 +585,12 @@ Tasks:
 
 **Goal:** Turn the implementation into strong engineering evidence.
 
-- ⬜ Architecture diagrams
-- ⬜ Updated README
+- ✅ Architecture diagrams
+- ✅ Updated README
 - ⬜ Demo screenshots
 - ⬜ Demo video
 - ⬜ Performance evidence
-- ⬜ Retrieval evaluation results
+- ✅ Retrieval evaluation results
 - ⬜ Cost/latency measurements
 - ⬜ Security design summary
 - ⬜ Deployment architecture

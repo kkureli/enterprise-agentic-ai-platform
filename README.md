@@ -7,62 +7,39 @@ The project is being developed incrementally with a focus on software engineerin
 ## Current Status
 
 **Sprint 0 — Repository & Architecture Foundation: completed**  
-**Sprint 1 — Enterprise Knowledge Ingestion & RAG v1: completed**
+**Sprint 1 — Enterprise Knowledge Ingestion & RAG v1: completed**  
+**Sprint 2 — Advanced Retrieval & Evaluation: completed**
 
 Implemented so far:
 
-- FastAPI backend
-- Async SQLAlchemy 2 + asyncpg
-- PostgreSQL
-- Alembic migrations
-- Redis infrastructure
-- Qdrant vector database
-- Tenant model and REST API
-- User model and tenant relationship
-- Tenant-scoped data isolation
-- Document model and upload API
-- Local document storage with SHA-256 checksums
-- PDF and TXT parsing
-- Recursive document chunking with LangChain
-- Azure OpenAI embeddings
-- Dense vector indexing in Qdrant
-- Tenant-filtered semantic retrieval
-- Retrieval REST API
-- Azure OpenAI chat model integration
-- Grounded RAG generation
-- LLM-selected source citations
-- Retrieved-chunk inspection for debugging and evaluation
-- Health and readiness endpoints
-- Integration tests with a dedicated PostgreSQL test database
-- Ruff linting and formatting
-- GitHub Actions CI
+- FastAPI backend with tenant-scoped APIs
+- Async SQLAlchemy 2 + PostgreSQL + Alembic
+- Redis and Qdrant infrastructure
+- Document upload, parsing, chunking, and Azure OpenAI embeddings
+- Dense + sparse hybrid retrieval with weighted RRF
+- Query-aware dense/sparse weighting
+- CrossEncoder reranking with retrieval-aware final rank fusion
+- Multi-query expansion and multi-query hybrid retrieval
+- Standard and Advanced RAG retrieval modes
+- Retrieval evaluation (Recall@K, MRR, nDCG@K) with persisted results
+- Health/readiness endpoints, Ruff, pytest, and GitHub Actions CI
 
-Current end-to-end RAG flow:
+Current RAG retrieval paths:
 
 ```text
-Document Upload
-      ↓
-Parsing
-      ↓
-Chunking
-      ↓
-Azure OpenAI Embeddings
-      ↓
-Qdrant Indexing
-      ↓
-Tenant-Scoped Retrieval
-      ↓
-Azure OpenAI Chat Model
-      ↓
-Grounded Answer
-      ↓
-Selected Sources + Retrieved Chunks
+Standard (default):
+Query → Hybrid Retrieval → CrossEncoder → Rank Fusion → Top-K → LLM
+
+Advanced:
+Query → Query Expansion → Multi-Query Hybrid → CrossEncoder (original query)
+  → Final Rank Fusion → Top-K → LLM
 ```
 
-Advanced hybrid retrieval, reranking, retrieval evaluation, LangGraph agent
-orchestration, MCP integrations, human-in-the-loop workflows, observability,
-frontend development, and cloud deployment are planned for upcoming sprints.
+LangGraph agent orchestration, MCP integrations, human-in-the-loop workflows,
+full observability, frontend development, and cloud deployment remain planned
+for upcoming sprints.
 
+More detail: [`docs/project-plan.md`](docs/project-plan.md) · [`docs/architecture.md`](docs/architecture.md)
 
 ## Architecture
 
@@ -74,18 +51,28 @@ flowchart TD
 
     FastAPI --> TenantAPI[Tenant API]
     FastAPI --> UserAPI[User API]
+    FastAPI --> DocumentAPI[Document API]
+    FastAPI --> RetrievalAPI[Retrieval API]
+    FastAPI --> RagAPI[RAG API]
     FastAPI --> HealthAPI[Health & Readiness API]
 
     TenantAPI --> Session[SQLAlchemy AsyncSession]
     UserAPI --> Session
+    DocumentAPI --> Session
 
     Session --> Engine[SQLAlchemy Async Engine]
     Engine --> AsyncPG[asyncpg]
     AsyncPG --> PostgreSQL[(PostgreSQL)]
 
+    DocumentAPI --> Storage[Local Document Storage]
+    DocumentAPI --> Qdrant[(Qdrant)]
+    RetrievalAPI --> Qdrant
+    RagAPI --> Qdrant
+    RagAPI --> Azure[Azure OpenAI]
+
     HealthAPI --> PostgreSQL
     HealthAPI --> Redis[(Redis)]
-    HealthAPI --> Qdrant[(Qdrant)]
+    HealthAPI --> Qdrant
 
     Alembic[Alembic Migrations] --> PostgreSQL
 
@@ -97,34 +84,22 @@ flowchart TD
     GitHub --> Pytest
 ```
 
-More detail is available in [`docs/architecture.md`](docs/architecture.md).
-
 ## Multi-Tenant Model
-
-The current data model establishes the first tenant boundary:
 
 ```text
 Tenant
- └── Users
+ ├── Users
+ └── Documents / Vector Chunks
 ```
 
-Each user belongs to one tenant through `tenant_id`.
+Each user and document belongs to one tenant through `tenant_id`.  
+Retrieval and RAG always apply tenant filters in Qdrant.
 
 User email uniqueness is scoped per tenant:
 
 ```text
 UNIQUE (tenant_id, email)
 ```
-
-This means:
-
-```text
-Tenant A + kaan@example.com  ✅
-Tenant B + kaan@example.com  ✅
-Tenant A + kaan@example.com  ❌ duplicate inside the same tenant
-```
-
-The same tenant boundary will later be extended to documents, retrieval, agent state, tools, and authorization.
 
 ## Tech Stack
 
@@ -143,6 +118,9 @@ The same tenant boundary will later be extended to documents, retrieval, agent s
 - Redis
 - Qdrant
 - Docker Compose
+- Azure OpenAI (embeddings + chat)
+- FastEmbed BM25 (sparse)
+- CrossEncoder reranker
 
 ### Quality
 
@@ -151,6 +129,7 @@ The same tenant boundary will later be extended to documents, retrieval, agent s
 - HTTPX
 - Ruff
 - GitHub Actions
+- Retrieval evaluation under `evals/`
 
 ## Repository Structure
 
@@ -163,10 +142,15 @@ enterprise-agentic-ai-platform/
 │   │   ├── core/
 │   │   ├── db/
 │   │   ├── models/
-│   │   └── schemas/
+│   │   ├── schemas/
+│   │   └── services/
+│   ├── scripts/
 │   └── tests/
 ├── docs/
 ├── evals/
+│   ├── datasets/
+│   ├── results/
+│   └── retrieval/
 ├── frontend/
 ├── infra/
 ├── mcp/
@@ -256,6 +240,30 @@ GET  /api/v1/tenants/{tenant_id}/users
 GET  /api/v1/users/{user_id}
 ```
 
+### Documents
+
+```text
+POST /api/v1/tenants/{tenant_id}/documents
+GET  /api/v1/tenants/{tenant_id}/documents/{document_id}
+```
+
+### Retrieval
+
+```text
+POST /api/v1/tenants/{tenant_id}/retrieval
+```
+
+### RAG
+
+```text
+POST /api/v1/tenants/{tenant_id}/rag
+```
+
+RAG accepts `retrieval_mode`:
+
+- `"standard"` (default) — hybrid + reranker + final fusion
+- `"advanced"` — multi-query hybrid + reranker + final fusion
+
 ## Testing
 
 Tests use a dedicated PostgreSQL database:
@@ -267,28 +275,27 @@ agentic_ai_test
 Run:
 
 ```bash
-uv run pytest -q
+cd backend && uv run pytest -q
 ```
 
-The test suite currently covers the critical foundation flows, including tenant creation, duplicate constraints, user creation, and tenant-scoped user isolation.
+### Retrieval evaluation
+
+```bash
+cd ~/Desktop/enterprise-agentic-ai-platform &&
+PYTHONPATH=backend uv run --project backend --env-file backend/.env python -m evals.retrieval.run_evaluation
+```
+
+Results are written to `evals/results/retrieval_results.json`.
+
+The current golden set is intentionally small (15 queries) and should not be
+treated as a large-scale production benchmark.
 
 ## Code Quality
 
-Run linting:
-
 ```bash
+cd backend
 uv run ruff check app tests
-```
-
-Check formatting:
-
-```bash
 uv run ruff format --check app tests
-```
-
-Format automatically:
-
-```bash
 uv run ruff format app tests
 ```
 
@@ -296,79 +303,33 @@ uv run ruff format app tests
 
 GitHub Actions runs on pushes and pull requests to `master` and `main`.
 
-The backend pipeline performs:
-
 ```text
-dependency install
-        ↓
-Ruff lint
-        ↓
-Ruff format check
-        ↓
-pytest against PostgreSQL test DB
+dependency install → Ruff lint → Ruff format check → pytest
 ```
 
 ## Roadmap
 
-### Sprint 1 — Enterprise Knowledge Ingestion & RAG v1
+### Completed
 
-Planned:
+- **Sprint 0** — Repository & architecture foundation
+- **Sprint 1** — Enterprise knowledge ingestion & RAG v1
+- **Sprint 2** — Advanced retrieval & evaluation
 
-- Tenant-scoped document model
-- Document upload
-- Parsing and chunking
-- Embeddings
-- Qdrant vector storage
-- Tenant-filtered retrieval
-- Grounded LLM answers with citations
+### Planned
 
-### Sprint 2 — Advanced Retrieval & Evaluation
-
-Planned:
-
-- Hybrid retrieval
-- Reranking
-- Retrieval evaluation
-- Golden datasets
-- Recall / MRR / nDCG
-
-### Sprint 3–6 — Agentic AI & Reliability
-
-Planned:
-
-- LangGraph orchestration
-- MCP tool integration
-- SQL/data agent
-- Human-in-the-loop flows
-- Agent permissions
-- Langfuse / OpenTelemetry
-- Evaluation and regression gates
-
-### Sprint 7–10 — Productization
-
-Planned:
-
-- React frontend
-- Production UX
-- Azure deployment
-- CI/CD expansion
-- Manufacturing-oriented multimodal use case
-- Portfolio evidence and demos
+- **Sprint 3** — LangGraph agent orchestration
+- **Sprint 4** — MCP & enterprise tool integration
+- **Sprint 5** — SQL agent, security & human-in-the-loop
+- **Sprint 6** — Observability & broader evaluation gates
+- **Sprint 7–10** — Frontend, Azure deployment, multimodal demo, portfolio polish
 
 ## Design Principles
 
-The project is being built around several production concerns from the beginning:
-
-- Multi-tenancy
-- Explicit tenant boundaries
-- Async I/O
-- Database migrations
-- Testability
-- CI enforcement
-- Observability
-- Evaluation
-- Secure tool execution
-- Human approval for sensitive actions
+- Multi-tenancy and explicit tenant boundaries
+- Async I/O and database migrations
+- Testability and CI enforcement
+- Measurable retrieval quality
+- Secure tool execution and human approval for sensitive actions (planned)
 - Reproducible local development
 
 ## License

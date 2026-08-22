@@ -1,0 +1,38 @@
+{
+  "evaluated_at": "2026-08-22T18:12:54.291506+00:00",
+  "eval_k": 3,
+  "num_queries": 15,
+  "dataset_path": "evals/datasets/retrieval_golden.jsonl",
+  "strategies": {
+    "Dense": {
+      "recall@3": 1.0,
+      "mrr": 1.0,
+      "ndcg@3": 1.0
+    },
+    "Sparse": {
+      "recall@3": 0.9333333333333333,
+      "mrr": 0.9,
+      "ndcg@3": 0.9087286502380971
+    },
+    "Hybrid": {
+      "recall@3": 1.0,
+      "mrr": 1.0,
+      "ndcg@3": 0.9946480526098792
+    },
+    "Hybrid + Reranker": {
+      "recall@3": 1.0,
+      "mrr": 1.0,
+      "ndcg@3": 0.9946480526098792
+    },
+    "Multi-Query Hybrid": {
+      "recall@3": 1.0,
+      "mrr": 1.0,
+      "ndcg@3": 1.0
+    },
+    "Multi-Query + Reranker": {
+      "recall@3": 1.0,
+      "mrr": 1.0,
+      "ndcg@3": 1.0
+    }
+  }
+}

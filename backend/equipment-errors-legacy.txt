@@ -1,0 +1,2 @@
+Legacy Equipment Error Reference
+Legacy hydraulic equipment may report error code AX-4102 when the hydraulic temperature exceeds its safe operating range. Technicians should inspect cooling and fluid conditions. This code is different from AX-4317.

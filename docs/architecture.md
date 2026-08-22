@@ -1,8 +1,11 @@
 # Architecture
 
-## Current Architecture — Sprint 0
+## Current Architecture — Sprint 0–2
 
-The current implementation establishes the backend and infrastructure foundation for the platform.
+The platform currently provides a multi-tenant FastAPI backend with document
+ingestion, hybrid retrieval, reranking, multi-query RAG modes, and retrieval
+evaluation. LangGraph agent orchestration and later productization features
+remain planned.
 
 ```mermaid
 flowchart TD
@@ -12,27 +15,41 @@ flowchart TD
 
     FastAPI --> TenantAPI[Tenant API]
     FastAPI --> UserAPI[User API]
+    FastAPI --> DocumentAPI[Document API]
+    FastAPI --> RetrievalAPI[Retrieval API]
+    FastAPI --> RagAPI[RAG API]
     FastAPI --> HealthAPI[Health & Readiness API]
 
     TenantAPI --> Session[SQLAlchemy AsyncSession]
     UserAPI --> Session
+    DocumentAPI --> Session
 
     Session --> Engine[SQLAlchemy Async Engine]
     Engine --> AsyncPG[asyncpg]
     AsyncPG --> PostgreSQL[(PostgreSQL)]
 
+    DocumentAPI --> Storage[Local Document Storage]
+    DocumentAPI --> Embed[Azure OpenAI Embeddings]
+    Embed --> Qdrant[(Qdrant Dense + Sparse)]
+
+    RetrievalAPI --> Hybrid[Hybrid Retrieval]
+    RagAPI --> Mode{retrieval_mode}
+    Mode -->|standard| HybridRerank[Hybrid + Reranker + Fusion]
+    Mode -->|advanced| MultiQuery[Multi-Query Hybrid + Reranker + Fusion]
+    HybridRerank --> Chat[Azure OpenAI Chat]
+    MultiQuery --> Chat
+
+    Hybrid --> Qdrant
+    HybridRerank --> Qdrant
+    MultiQuery --> Qdrant
+
     HealthAPI --> PostgreSQL
     HealthAPI --> Redis[(Redis)]
-    HealthAPI --> Qdrant[(Qdrant)]
+    HealthAPI --> Qdrant
 
     Alembic[Alembic Migrations] --> PostgreSQL
-
-    Pytest[pytest Integration Tests] --> FastAPI
-    Ruff[Ruff Lint & Format] --> FastAPI
-
-    GitHub[GitHub Actions CI]
-    GitHub --> Ruff
-    GitHub --> Pytest
+    Evals[Retrieval Eval Runner] --> Qdrant
+    Evals --> Results[evals/results/retrieval_results.json]
 ```
 
 ## Request Path
@@ -59,13 +76,59 @@ PostgreSQL
 
 `AsyncSession` is created per request through the `get_db` FastAPI dependency.
 
-The SQLAlchemy engine manages the database connectivity layer while `asyncpg` is the underlying asynchronous PostgreSQL driver.
+## RAG Retrieval Paths
+
+### Standard (default)
+
+```text
+Query
+  ↓
+Dense + Sparse Hybrid Retrieval
+  ↓
+Weighted RRF
+  ↓
+CrossEncoder Reranker
+  ↓
+Final Rank Fusion
+  ↓
+Top-K Chunks
+  ↓
+Azure OpenAI Chat
+  ↓
+Grounded Answer + Sources
+```
+
+### Advanced
+
+```text
+Query
+  ↓
+Query Expansion
+  ↓
+Multi-Query Hybrid Retrieval
+  ↓
+Multi-Query RRF + Deduplication
+  ↓
+CrossEncoder (original user query)
+  ↓
+Final Rank Fusion
+  ↓
+Top-K Chunks
+  ↓
+Azure OpenAI Chat
+  ↓
+Grounded Answer + Sources
+```
+
+CrossEncoder always receives the original user query. Expansion queries are used
+only for candidate retrieval.
 
 ## Multi-Tenant Data Model
 
 ```mermaid
 erDiagram
     TENANT ||--o{ USER : has
+    TENANT ||--o{ DOCUMENT : owns
 
     TENANT {
         uuid id PK
@@ -82,18 +145,18 @@ erDiagram
         datetime created_at
         datetime updated_at
     }
-```
 
-The relationship is enforced at the database level:
-
-```text
-users.tenant_id → tenants.id
-```
-
-Deleting a tenant cascades to its users through:
-
-```text
-ON DELETE CASCADE
+    DOCUMENT {
+        uuid id PK
+        uuid tenant_id FK
+        string filename
+        string content_type
+        int file_size_bytes
+        string checksum_sha256
+        string status
+        datetime created_at
+        datetime updated_at
+    }
 ```
 
 User email uniqueness is tenant-scoped:
@@ -102,34 +165,26 @@ User email uniqueness is tenant-scoped:
 UNIQUE (tenant_id, email)
 ```
 
-Therefore, the same email can belong to users in different tenants while duplicate users inside the same tenant are rejected.
-
 ## Tenant Isolation
 
-Current API queries for tenant-owned users explicitly filter by `tenant_id`.
+Documents, retrieval, and RAG are tenant-scoped.
+
+Qdrant queries always include a `tenant_id` payload filter. Optional metadata
+filters (`document_id`, `filename`) compose with that tenant boundary.
 
 Conceptually:
 
 ```text
 Tenant A
- ├── User A1
- └── User A2
+ ├── Documents A*
+ └── Chunks A*
 
 Tenant B
- └── User B1
+ ├── Documents B*
+ └── Chunks B*
 ```
 
-A request to list users for Tenant A must only return A1 and A2.
-
-This boundary will later be extended to:
-
-- Documents
-- Vector collections / payload filters
-- Retrieval
-- Agent state
-- Tool permissions
-- Audit events
-- Authorization
+A request for Tenant A must never return Tenant B chunks.
 
 ## Infrastructure
 
@@ -141,42 +196,32 @@ Current responsibility:
 
 - Tenant data
 - User data
-- Relational application state
-
-Future responsibility:
-
 - Document metadata
-- Agent metadata
-- Audit and workflow records
+- Relational application state
 
 ### Redis
 
 Currently provisioned and validated through the readiness endpoint.
 
-Planned responsibilities:
+Planned responsibilities (not yet implemented):
 
 - Caching
 - Transient agent state
 - Checkpoint support
 - Rate limiting
-- Distributed locks where required
 
 ### Qdrant
 
-Currently provisioned and validated through the readiness endpoint.
+Current responsibility:
 
-Planned responsibilities:
-
-- Embedding storage
-- Tenant-scoped vector retrieval
+- Dense embeddings
+- Sparse BM25 vectors
+- Tenant-scoped hybrid retrieval
 - Metadata filtering
-- Semantic search
 
-Qdrant is infrastructure-ready, but RAG ingestion and retrieval are not yet implemented.
+Qdrant remains a retrieval index, not the primary application database.
 
 ## Health Model
-
-Two separate endpoints are used:
 
 ```text
 GET /health
@@ -193,8 +238,6 @@ Redis
 Qdrant
 ```
 
-If a required dependency is unavailable, readiness returns a non-ready response rather than reporting the service as ready.
-
 ## Database Migrations
 
 Schema evolution is managed with Alembic.
@@ -205,9 +248,9 @@ Current migration history includes:
 create tenants table
         ↓
 create users table
+        ↓
+create documents table
 ```
-
-Alembic uses the same SQLAlchemy metadata as the application models and generates PostgreSQL schema migrations from model changes.
 
 ## Testing Architecture
 
@@ -217,25 +260,18 @@ Integration tests use a dedicated PostgreSQL database:
 agentic_ai_test
 ```
 
-Test requests flow through the real FastAPI and SQLAlchemy stack:
+Retrieval evaluation is separate from unit/integration tests:
 
 ```text
-pytest
-   ↓
-HTTPX AsyncClient
-   ↓
-FastAPI
-   ↓
-SQLAlchemy AsyncSession
-   ↓
-asyncpg
-   ↓
-PostgreSQL test DB
+evals/datasets/retrieval_golden.jsonl
+        ↓
+evals/retrieval/run_evaluation.py
+        ↓
+evals/results/retrieval_results.json
 ```
 
-The test engine uses `NullPool` so async database connections are not reused across independent pytest event loops.
-
-Tests currently focus on critical foundation behavior rather than exhaustive coverage.
+The golden set is intentionally small and is a reproducible Sprint 2 artifact,
+not a large-scale production benchmark.
 
 ## CI Architecture
 
@@ -252,8 +288,6 @@ flowchart LR
     Tests --> Postgres[(PostgreSQL Test DB)]
 ```
 
-A failed lint, format, or test step fails the workflow.
-
 ## Current Technology Stack
 
 ### Application
@@ -261,19 +295,23 @@ A failed lint, format, or test step fails the workflow.
 - Python 3.12
 - FastAPI
 - Pydantic
+- LangChain text splitters / Azure OpenAI integrations
 
-### Persistence
+### Persistence & Retrieval
 
 - SQLAlchemy 2 Async
 - asyncpg
 - PostgreSQL
 - Alembic
+- Qdrant (dense + sparse)
+- FastEmbed BM25
+- CrossEncoder reranker
 
 ### Infrastructure
 
 - Docker Compose
 - Redis
-- Qdrant
+- Azure OpenAI
 
 ### Quality
 
@@ -282,10 +320,11 @@ A failed lint, format, or test step fails the workflow.
 - HTTPX
 - Ruff
 - GitHub Actions
+- Retrieval evaluation under `evals/`
 
 ## Planned Target Architecture
 
-The following is the direction of the project, not the current implementation:
+The following is the direction of the project, **not** the current implementation:
 
 ```mermaid
 flowchart TD
@@ -313,7 +352,9 @@ flowchart TD
     Graph --> Evals[Evaluation Layer]
 ```
 
-Planned components will only be marked as implemented after their corresponding sprint is completed.
+Planned components such as LangGraph, MCP tools, HITL, React UI, and cloud
+deployment will only be marked as implemented after their corresponding sprint
+is completed.
 
 ## Architecture Principles
 
@@ -325,8 +366,8 @@ The project is designed around:
 - Schema migrations
 - Testability
 - CI enforcement
-- Observability
-- Evaluation
-- Secure tool execution
-- Human approval for sensitive actions
+- Measurable retrieval quality
+- Observability (planned expansion)
+- Secure tool execution (planned)
+- Human approval for sensitive actions (planned)
 - Reproducible local environments
