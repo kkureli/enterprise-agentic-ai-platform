@@ -4,7 +4,7 @@ This document tracks the implementation roadmap for the **Enterprise Agentic AI 
 
 The project is intentionally built in incremental sprints. A capability is only marked as complete after it is implemented and verified locally.
 
-**Current progress:** Sprint 0 ✅ · Sprint 1 ✅ · Sprint 2 ✅ · Sprint 3+ ⬜ planned
+**Current progress:** Sprint 0 ✅ · Sprint 1 ✅ · Sprint 2 ✅ · Sprint 3 ✅ · Sprint 4+ ⬜ planned
 
 ## Status Legend
 
@@ -424,34 +424,79 @@ Remaining regression-gate automation (CI-enforced retrieval checks) is deferred 
 
 # Sprint 3 — LangGraph Agent Orchestration
 
-**Status: ⬜ Planned (not implemented)**
+**Status: ✅ Completed**
 
-**Goal:** Move from single RAG calls to stateful agent workflows.
+**Goal:** Introduce the first stateful orchestration layer over the existing RAG capability.
 
-- ⬜ LangGraph integration
-- ⬜ Agent state definition
-- ⬜ Planning / routing
-- ⬜ Tool selection
-- ⬜ Retrieval node
-- ⬜ Decision nodes
-- ⬜ Error handling
-- ⬜ Retry paths
-- ⬜ Multi-step workflows
-- ⬜ Agent state persistence foundation
+This sprint delivers a **router-based LangGraph orchestration graph**, not a full
+multi-agent supervisor architecture. SQL Agent, MCP tools, HITL, conversation
+memory, and Langfuse remain planned for later sprints.
 
-Target:
+## 3.1 Graph & Shared State
+
+- ✅ LangGraph `StateGraph` orchestration
+- ✅ Shared `AgentState` (`tenant_id`, `query`, `retrieval_mode`, `route`, `rag_answer`, `final_answer`)
+- ✅ Compiled graph entrypoint: `agent_graph`
+
+## 3.2 LLM Router
+
+- ✅ LLM-based router with structured output
+- ✅ Routes:
+  - `knowledge` — answerable from enterprise documents / knowledge base
+  - `unsupported` — capabilities not yet available (SQL, tools, actions, unrelated)
+- ✅ Conditional edges from router to specialist / fallback nodes
+
+## 3.3 Specialist & Response Nodes
+
+- ✅ RAG specialist node that **reuses** `answer_question()` from the existing RAG pipeline
+  - does not reimplement retrieval or generation inside LangGraph
+  - propagates `retrieval_mode` (`standard` / `advanced`)
+- ✅ Finalize node (knowledge path)
+- ✅ Fallback node for unsupported requests
+
+## 3.4 Implemented Graph
 
 ```text
-User Request
-    ↓
-LangGraph
-    ↓
-Intent / Decision
-    ├── RAG
-    ├── SQL
-    ├── Tool
-    └── Human Approval
+START
+  ↓
+LLM Router
+  ├── knowledge → RAG Node → Finalize → END
+  └── unsupported → Fallback → END
 ```
+
+## 3.5 Agent API
+
+- ✅ `POST /api/v1/tenants/{tenant_id}/agent`
+- ✅ Request: `question`, optional `retrieval_mode` (default `standard`)
+- ✅ Response: `{ route, answer }`
+- ✅ Tenant 404 when tenant is missing
+- ✅ Invalid `retrieval_mode` → HTTP 422
+- ✅ Controlled graph execution failure handling → HTTP 503 (`Agent execution failed.`)
+
+## 3.6 Critical Agent Tests
+
+- ✅ Successful graph result mapping for `knowledge` and `unsupported`
+- ✅ Invalid `retrieval_mode` validation (422)
+- ✅ Graph execution failure maps to 503
+
+## Sprint 3 Definition of Done
+
+Sprint 3 is complete when:
+
+```text
+Agent request enters LangGraph
+        ↓
+LLM router classifies knowledge vs unsupported
+        ↓
+Knowledge path reuses existing RAG (standard/advanced)
+        ↓
+Unsupported path returns controlled fallback
+        ↓
+API returns route + answer, with 422/503 guards
+```
+
+**Not in Sprint 3:** SQL Agent, MCP Agent, HITL approvals, supervisor
+orchestration, conversation memory, retries/persistence, or Langfuse tracing.
 
 ---
 
@@ -617,6 +662,10 @@ Tasks:
 ---
 
 # Overall Target Architecture
+
+The diagram below is the long-term target. Sprint 3 currently implements only a
+router-based LangGraph path (`knowledge` → RAG, `unsupported` → fallback).
+SQL Agent, MCP Tools, HITL, and full observability are still planned.
 
 ```text
                          User

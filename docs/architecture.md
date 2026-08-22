@@ -1,11 +1,11 @@
 # Architecture
 
-## Current Architecture — Sprint 0–2
+## Current Architecture — Sprint 0–3
 
 The platform currently provides a multi-tenant FastAPI backend with document
-ingestion, hybrid retrieval, reranking, multi-query RAG modes, and retrieval
-evaluation. LangGraph agent orchestration and later productization features
-remain planned.
+ingestion, hybrid retrieval, reranking, multi-query RAG modes, retrieval
+evaluation, and a **router-based LangGraph agent**. SQL Agent, MCP tools,
+HITL, conversation memory, and Langfuse remain planned.
 
 ```mermaid
 flowchart TD
@@ -18,6 +18,7 @@ flowchart TD
     FastAPI --> DocumentAPI[Document API]
     FastAPI --> RetrievalAPI[Retrieval API]
     FastAPI --> RagAPI[RAG API]
+    FastAPI --> AgentAPI[Agent API]
     FastAPI --> HealthAPI[Health & Readiness API]
 
     TenantAPI --> Session[SQLAlchemy AsyncSession]
@@ -38,6 +39,11 @@ flowchart TD
     Mode -->|advanced| MultiQuery[Multi-Query Hybrid + Reranker + Fusion]
     HybridRerank --> Chat[Azure OpenAI Chat]
     MultiQuery --> Chat
+
+    AgentAPI --> Graph[LangGraph Router Graph]
+    Graph -->|knowledge| RagReuse[Reuse RAG Pipeline]
+    Graph -->|unsupported| Fallback[Fallback Node]
+    RagReuse --> Mode
 
     Hybrid --> Qdrant
     HybridRerank --> Qdrant
@@ -122,6 +128,61 @@ Grounded Answer + Sources
 
 CrossEncoder always receives the original user query. Expansion queries are used
 only for candidate retrieval.
+
+## Agent Orchestration (Sprint 3)
+
+The agent layer is a **router-based LangGraph graph**, not a full multi-agent
+supervisor. RAG is invoked as an existing capability; retrieval and generation
+are not reimplemented inside the graph.
+
+### Implemented graph
+
+```text
+START
+  ↓
+LLM Router (structured output)
+  ├── knowledge → RAG Node → Finalize → END
+  └── unsupported → Fallback → END
+```
+
+### Shared state
+
+```text
+AgentState
+├── tenant_id
+├── query
+├── retrieval_mode   # standard | advanced
+├── route            # knowledge | unsupported
+├── rag_answer
+└── final_answer
+```
+
+### Request path
+
+```text
+POST /api/v1/tenants/{tenant_id}/agent
+  ↓
+Validate tenant + payload
+  ↓
+agent_graph.ainvoke({ tenant_id, query, retrieval_mode })
+  ↓
+{ route, answer }
+```
+
+Failure handling:
+
+- invalid `retrieval_mode` → HTTP 422
+- graph execution exception → HTTP 503 (`Agent execution failed.`)
+
+### What is intentionally not implemented yet
+
+- SQL Agent
+- MCP tool agent
+- Human-in-the-loop approvals
+- Multi-agent supervisor orchestration
+- Conversation memory / checkpoint persistence
+- Langfuse / full observability traces
+- Automatic retry policies
 
 ## Multi-Tenant Data Model
 
@@ -273,6 +334,9 @@ evals/results/retrieval_results.json
 The golden set is intentionally small and is a reproducible Sprint 2 artifact,
 not a large-scale production benchmark.
 
+Critical agent API tests cover graph result mapping, invalid `retrieval_mode`
+validation (422), and controlled graph failure handling (503).
+
 ## CI Architecture
 
 GitHub Actions executes the backend quality gate on pushes and pull requests.
@@ -296,6 +360,7 @@ flowchart LR
 - FastAPI
 - Pydantic
 - LangChain text splitters / Azure OpenAI integrations
+- LangGraph (router-based agent orchestration)
 
 ### Persistence & Retrieval
 
@@ -324,7 +389,10 @@ flowchart LR
 
 ## Planned Target Architecture
 
-The following is the direction of the project, **not** the current implementation:
+The following remains the longer-term direction. Sprint 3 delivers only the
+router-based LangGraph entrypoint above; supervisor-style multi-agent flows,
+MCP tools, SQL agent, HITL, and observability expansion are **not** current
+implementation:
 
 ```mermaid
 flowchart TD
@@ -352,9 +420,9 @@ flowchart TD
     Graph --> Evals[Evaluation Layer]
 ```
 
-Planned components such as LangGraph, MCP tools, HITL, React UI, and cloud
-deployment will only be marked as implemented after their corresponding sprint
-is completed.
+Planned components such as MCP tools, HITL, React UI, cloud deployment, and
+supervisor-style agent expansion will only be marked as implemented after their
+corresponding sprint is completed.
 
 ## Architecture Principles
 

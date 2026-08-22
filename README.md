@@ -8,7 +8,8 @@ The project is being developed incrementally with a focus on software engineerin
 
 **Sprint 0 — Repository & Architecture Foundation: completed**  
 **Sprint 1 — Enterprise Knowledge Ingestion & RAG v1: completed**  
-**Sprint 2 — Advanced Retrieval & Evaluation: completed**
+**Sprint 2 — Advanced Retrieval & Evaluation: completed**  
+**Sprint 3 — LangGraph Agent Orchestration: completed**
 
 Implemented so far:
 
@@ -22,6 +23,8 @@ Implemented so far:
 - Multi-query expansion and multi-query hybrid retrieval
 - Standard and Advanced RAG retrieval modes
 - Retrieval evaluation (Recall@K, MRR, nDCG@K) with persisted results
+- LangGraph router-based agent orchestration (knowledge / unsupported)
+- Agent API reusing the existing RAG pipeline as a capability
 - Health/readiness endpoints, Ruff, pytest, and GitHub Actions CI
 
 Current RAG retrieval paths:
@@ -35,9 +38,16 @@ Query → Query Expansion → Multi-Query Hybrid → CrossEncoder (original quer
   → Final Rank Fusion → Top-K → LLM
 ```
 
-LangGraph agent orchestration, MCP integrations, human-in-the-loop workflows,
-full observability, frontend development, and cloud deployment remain planned
-for upcoming sprints.
+Current agent orchestration (router graph, not a multi-agent supervisor):
+
+```text
+START → LLM Router
+          ├── knowledge → RAG Node → Finalize → END
+          └── unsupported → Fallback → END
+```
+
+MCP tool agents, SQL agent, human-in-the-loop, conversation memory, Langfuse,
+frontend development, and cloud deployment remain planned for upcoming sprints.
 
 More detail: [`docs/project-plan.md`](docs/project-plan.md) · [`docs/architecture.md`](docs/architecture.md)
 
@@ -54,6 +64,7 @@ flowchart TD
     FastAPI --> DocumentAPI[Document API]
     FastAPI --> RetrievalAPI[Retrieval API]
     FastAPI --> RagAPI[RAG API]
+    FastAPI --> AgentAPI[Agent API]
     FastAPI --> HealthAPI[Health & Readiness API]
 
     TenantAPI --> Session[SQLAlchemy AsyncSession]
@@ -69,6 +80,9 @@ flowchart TD
     RetrievalAPI --> Qdrant
     RagAPI --> Qdrant
     RagAPI --> Azure[Azure OpenAI]
+    AgentAPI --> LangGraph[LangGraph Router]
+    LangGraph --> RagAPI
+    LangGraph --> Azure
 
     HealthAPI --> PostgreSQL
     HealthAPI --> Redis[(Redis)]
@@ -121,6 +135,7 @@ UNIQUE (tenant_id, email)
 - Azure OpenAI (embeddings + chat)
 - FastEmbed BM25 (sparse)
 - CrossEncoder reranker
+- LangGraph (router-based orchestration)
 
 ### Quality
 
@@ -139,6 +154,7 @@ enterprise-agentic-ai-platform/
 │   ├── alembic/
 │   ├── app/
 │   │   ├── api/
+│   │   ├── agents/
 │   │   ├── core/
 │   │   ├── db/
 │   │   ├── models/
@@ -264,6 +280,15 @@ RAG accepts `retrieval_mode`:
 - `"standard"` (default) — hybrid + reranker + final fusion
 - `"advanced"` — multi-query hybrid + reranker + final fusion
 
+### Agent
+
+```text
+POST /api/v1/tenants/{tenant_id}/agent
+```
+
+Router-based LangGraph orchestration. Supports the same `retrieval_mode`
+values as RAG. Returns `{ route, answer }`. Graph execution failures map to HTTP 503.
+
 ## Testing
 
 Tests use a dedicated PostgreSQL database:
@@ -314,10 +339,10 @@ dependency install → Ruff lint → Ruff format check → pytest
 - **Sprint 0** — Repository & architecture foundation
 - **Sprint 1** — Enterprise knowledge ingestion & RAG v1
 - **Sprint 2** — Advanced retrieval & evaluation
+- **Sprint 3** — LangGraph agent orchestration (router graph)
 
 ### Planned
 
-- **Sprint 3** — LangGraph agent orchestration
 - **Sprint 4** — MCP & enterprise tool integration
 - **Sprint 5** — SQL agent, security & human-in-the-loop
 - **Sprint 6** — Observability & broader evaluation gates
