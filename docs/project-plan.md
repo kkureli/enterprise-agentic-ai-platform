@@ -4,7 +4,7 @@ This document tracks the implementation roadmap for the **Enterprise Agentic AI 
 
 The project is intentionally built in incremental sprints. A capability is only marked as complete after it is implemented and verified locally.
 
-**Current progress:** Sprint 0 ✅ · Sprint 1 ✅ · Sprint 2 ✅ · Sprint 3 ✅ · Sprint 4+ ⬜ planned
+**Current progress:** Sprint 0 ✅ · Sprint 1 ✅ · Sprint 2 ✅ · Sprint 3 ✅ · Sprint 4 ✅ · Sprint 5+ ⬜ planned
 
 ## Status Legend
 
@@ -429,8 +429,8 @@ Remaining regression-gate automation (CI-enforced retrieval checks) is deferred 
 **Goal:** Introduce the first stateful orchestration layer over the existing RAG capability.
 
 This sprint delivers a **router-based LangGraph orchestration graph**, not a full
-multi-agent supervisor architecture. SQL Agent, MCP tools, HITL, conversation
-memory, and Langfuse remain planned for later sprints.
+multi-agent supervisor architecture. MCP tools were added in Sprint 4. SQL Agent,
+HITL, conversation memory, and Langfuse remain planned for later sprints.
 
 ## 3.1 Graph & Shared State
 
@@ -441,10 +441,11 @@ memory, and Langfuse remain planned for later sprints.
 ## 3.2 LLM Router
 
 - ✅ LLM-based router with structured output
-- ✅ Routes:
+- ✅ Routes (as delivered in Sprint 3):
   - `knowledge` — answerable from enterprise documents / knowledge base
-  - `unsupported` — capabilities not yet available (SQL, tools, actions, unrelated)
+  - `unsupported` — capabilities not yet available
 - ✅ Conditional edges from router to specialist / fallback nodes
+- ✅ Sprint 4 extended routes with `tool` (see Sprint 4)
 
 ## 3.3 Specialist & Response Nodes
 
@@ -454,7 +455,7 @@ memory, and Langfuse remain planned for later sprints.
 - ✅ Finalize node (knowledge path)
 - ✅ Fallback node for unsupported requests
 
-## 3.4 Implemented Graph
+## 3.4 Implemented Graph (Sprint 3 baseline)
 
 ```text
 START
@@ -463,6 +464,8 @@ LLM Router
   ├── knowledge → RAG Node → Finalize → END
   └── unsupported → Fallback → END
 ```
+
+Sprint 4 adds the `tool` → MCP Tool Node path; see Sprint 4 for the current graph.
 
 ## 3.5 Agent API
 
@@ -495,27 +498,114 @@ Unsupported path returns controlled fallback
 API returns route + answer, with 422/503 guards
 ```
 
-**Not in Sprint 3:** SQL Agent, MCP Agent, HITL approvals, supervisor
-orchestration, conversation memory, retries/persistence, or Langfuse tracing.
+**Not in Sprint 3 (delivered later or still planned):** MCP Agent (Sprint 4),
+SQL Agent, HITL approvals, supervisor orchestration, conversation memory,
+retries/persistence, or Langfuse tracing.
 
 ---
 
 # Sprint 4 — MCP & Enterprise Tool Integration
 
-**Goal:** Allow agents to interact with external enterprise systems through controlled tools.
+**Status: ✅ Completed**
 
-- ⬜ MCP server foundation
-- ⬜ Tool discovery
-- ⬜ Tool schemas
-- ⬜ Enterprise API tools
-- ⬜ CRM/ticket-style demo tools
-- ⬜ Tool input validation
-- ⬜ Tool output normalization
-- ⬜ Tenant-aware tool access
+**Goal:** Allow agents to interact with enterprise operational tools through a
+controlled MCP integration, without claiming real external system persistence
+or Sprint 5 security/HITL features.
+
+## 4.1 MCP Server Project
+
+- ✅ Separate MCP server package under `/mcp`
+- ✅ Local stdio transport between backend and MCP server
+- ✅ MCP does **not** expose REST endpoints; tools are invoked over MCP protocol
+- ✅ Structured tool outputs (Pydantic models → structured content)
+
+## 4.2 Implemented MCP Tools
+
+| Tool | Purpose | Persistence |
+|------|---------|-------------|
+| `get_asset_status` | Current operational status for an asset | Read from in-memory demo data |
+| `get_maintenance_history` | Maintenance history for an asset | Read from in-memory demo data |
+| `create_maintenance_ticket` | Create a maintenance ticket | **Simulated write** — does **not** persist to a DB or external enterprise API |
+
+## 4.3 Backend MCP Client
+
+- ✅ `maintenance_mcp_session()` — stdio client session to `/mcp/server.py`
+- ✅ Tool discovery via `list_tools()`
+- ✅ Tool execution via `call_tool()`
+- ✅ Structured MCP tool outputs consumed by the agent
+
+## 4.4 LangGraph Tool Route
+
+- ✅ Router route types: `knowledge` | `tool` | `unsupported`
+- ✅ MCP Tool Node integrated into the LangGraph graph
+- ✅ LLM tool binding using discovered MCP tool schemas
+- ✅ Tool-calling loop:
+
+```text
+User request
+  ↓
+LLM tool selection (bound MCP schemas)
+  ↓
+MCP execution (call_tool)
+  ↓
+ToolMessage
+  ↓
+LLM final answer
+```
+
+Routing responsibilities:
+
+- The **router** first selects the capability category (`knowledge` / `tool` / `unsupported`).
+- The **MCP Tool Node's LLM** then selects the specific MCP tool.
+- MCP itself does not create REST endpoints.
+
+## 4.5 Current Graph
+
+```text
+START
+  ↓
+LLM Router
+  ├── knowledge → RAG Node → Finalize → END
+  ├── tool → MCP Tool Node → Finalize → END
+  └── unsupported → Fallback → END
+```
+
+## 4.6 Agent API
+
+- ✅ `POST /api/v1/tenants/{tenant_id}/agent` supports the `tool` route
+- ✅ Response continues to return `{ route, answer }`
+
+## 4.7 Tests
+
+- ✅ 18 tests currently pass (`cd backend && uv run pytest -q`)
+
+## Sprint 4 Definition of Done
+
+Sprint 4 is complete when:
+
+```text
+MCP server runs as a separate /mcp project over stdio
+        ↓
+Backend discovers tools via list_tools()
+        ↓
+Router can select the tool capability route
+        ↓
+MCP Tool Node binds schemas, calls MCP, returns ToolMessage → final answer
+        ↓
+create_maintenance_ticket is documented as simulated (no DB / external API write)
+        ↓
+Agent API returns route + answer for tool requests; tests remain green
+```
+
+**Not in Sprint 4 (still planned):** write persistence to a real DB or enterprise
+API, HITL/approval gates, SQL agent & SQL security, JWT/RBAC, real external
+enterprise system integration, conversation memory, or Langfuse.
 
 ---
 
 # Sprint 5 — SQL Agent, Security & Human-in-the-Loop
+
+**Status: ⬜ Planned**
 
 **Goal:** Introduce controlled data access and approval-sensitive actions.
 
@@ -536,6 +626,7 @@ orchestration, conversation memory, retries/persistence, or Langfuse tracing.
 - ⬜ Prompt injection defenses
 - ⬜ Input validation
 - ⬜ Audit trail
+- ⬜ SQL security controls
 
 ## Human-in-the-Loop
 
@@ -543,6 +634,11 @@ orchestration, conversation memory, retries/persistence, or Langfuse tracing.
 - ⬜ Human approval
 - ⬜ Resume workflow
 - ⬜ Redis-backed transient workflow state
+
+## Enterprise Write Persistence (planned)
+
+- ⬜ Persist write/action tools (e.g. tickets) to a DB or real external enterprise API
+- ⬜ Real external enterprise system integration beyond local MCP demo data
 
 ---
 
@@ -663,9 +759,10 @@ Tasks:
 
 # Overall Target Architecture
 
-The diagram below is the long-term target. Sprint 3 currently implements only a
-router-based LangGraph path (`knowledge` → RAG, `unsupported` → fallback).
-SQL Agent, MCP Tools, HITL, and full observability are still planned.
+The diagram below is the long-term target. Sprints 3–4 currently implement a
+router-based LangGraph path (`knowledge` → RAG, `tool` → local MCP tools over
+stdio, `unsupported` → fallback). SQL Agent, HITL, write persistence to real
+enterprise systems, and full observability remain planned.
 
 ```text
                          User

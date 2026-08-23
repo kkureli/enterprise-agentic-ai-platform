@@ -7,7 +7,7 @@ from app.services.llm_service import get_chat_model
 
 
 class RouteDecision(BaseModel):
-    route: Literal["knowledge", "unsupported"]
+    route: Literal["knowledge", "tool", "unsupported"]
 
 
 SYSTEM_PROMPT = """
@@ -16,14 +16,18 @@ You are a router for an enterprise operations AI system.
 Classify the user's request into exactly one route:
 
 - knowledge:
-  Use when the request asks for information that could be answered
-  from enterprise documents, policies, manuals, procedures, error-code
-  documentation, or other internal knowledge-base content.
+  Use when the request asks for information that should be answered
+  from enterprise documents, policies, manuals, procedures, or
+  internal knowledge-base content.
+
+- tool:
+  Use when the request requires current operational data or an
+  enterprise system capability that can be obtained through available
+  operational tools, such as checking the current status of an asset.
 
 - unsupported:
   Use when the request requires a capability that is not currently
-  available, such as querying operational databases, performing actions,
-  calling external tools, creating records, or handling unrelated requests.
+  available.
 
 Do not answer the user's question.
 Only classify the request.

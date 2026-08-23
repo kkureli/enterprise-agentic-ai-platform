@@ -1,11 +1,12 @@
 # Architecture
 
-## Current Architecture — Sprint 0–3
+## Current Architecture — Sprint 0–4
 
 The platform currently provides a multi-tenant FastAPI backend with document
 ingestion, hybrid retrieval, reranking, multi-query RAG modes, retrieval
-evaluation, and a **router-based LangGraph agent**. SQL Agent, MCP tools,
-HITL, conversation memory, and Langfuse remain planned.
+evaluation, and a **router-based LangGraph agent** with knowledge (RAG) and
+tool (MCP) routes. SQL Agent, HITL/approval, write persistence to real
+enterprise systems, conversation memory, and Langfuse remain planned.
 
 ```mermaid
 flowchart TD
@@ -42,8 +43,11 @@ flowchart TD
 
     AgentAPI --> Graph[LangGraph Router Graph]
     Graph -->|knowledge| RagReuse[Reuse RAG Pipeline]
+    Graph -->|tool| MCPToolNode[MCP Tool Node]
     Graph -->|unsupported| Fallback[Fallback Node]
     RagReuse --> Mode
+    MCPToolNode --> MCPClient[Backend MCP Client]
+    MCPClient -->|stdio| MCPServer[MCP Server /mcp]
 
     Hybrid --> Qdrant
     HybridRerank --> Qdrant
@@ -129,21 +133,34 @@ Grounded Answer + Sources
 CrossEncoder always receives the original user query. Expansion queries are used
 only for candidate retrieval.
 
-## Agent Orchestration (Sprint 3)
+## Agent Orchestration (Sprint 3–4)
 
 The agent layer is a **router-based LangGraph graph**, not a full multi-agent
-supervisor. RAG is invoked as an existing capability; retrieval and generation
-are not reimplemented inside the graph.
+supervisor. RAG and MCP tools are invoked as capabilities; retrieval/generation
+and MCP protocol details are not reimplemented as REST APIs inside the graph.
 
 ### Implemented graph
 
 ```text
 START
   ↓
-LLM Router (structured output)
+LLM Router
   ├── knowledge → RAG Node → Finalize → END
+  ├── tool → MCP Tool Node → Finalize → END
   └── unsupported → Fallback → END
 ```
+
+### Routing responsibilities
+
+1. The **LLM Router** selects the capability category:
+   - `knowledge` — enterprise documents / knowledge base
+   - `tool` — current operational data or enterprise tool actions via MCP
+   - `unsupported` — capabilities not currently available
+2. On the `tool` path, the **MCP Tool Node's LLM** selects the specific MCP tool
+   using schemas discovered from the MCP server.
+3. **MCP itself does not create REST endpoints.** Tools are exposed over the
+   MCP protocol; the only HTTP surface for agents remains
+   `POST /api/v1/tenants/{tenant_id}/agent`.
 
 ### Shared state
 
@@ -152,8 +169,9 @@ AgentState
 ├── tenant_id
 ├── query
 ├── retrieval_mode   # standard | advanced
-├── route            # knowledge | unsupported
+├── route            # knowledge | tool | unsupported
 ├── rag_answer
+├── tool_answer
 └── final_answer
 ```
 
@@ -174,11 +192,63 @@ Failure handling:
 - invalid `retrieval_mode` → HTTP 422
 - graph execution exception → HTTP 503 (`Agent execution failed.`)
 
+## MCP & Enterprise Tool Integration (Sprint 4)
+
+### Separate MCP server project
+
+The MCP server lives under `/mcp` as its own `uv` project
+(`enterprise-maintenance-mcp`). It is not part of the FastAPI process.
+
+Current local integration uses **stdio** transport:
+
+```text
+Backend MCP client
+  ↓
+stdio (uv run python server.py, cwd=/mcp)
+  ↓
+MCP server process
+```
+
+### Backend MCP client
+
+`backend/app/services/mcp_client.py`:
+
+- Opens a stdio session to the MCP server
+- Discovers tools via `list_tools()`
+- Executes tools via `call_tool(name, arguments)`
+- Consumes structured tool outputs (`structured_content`)
+
+### Tool-calling loop (MCP Tool Node)
+
+```text
+User request (tool route)
+  ↓
+list_tools() → bind MCP schemas to chat model
+  ↓
+LLM tool selection
+  ↓
+call_tool() → MCP execution
+  ↓
+ToolMessage (structured result as JSON)
+  ↓
+LLM final answer → tool_answer → Finalize
+```
+
+### Implemented MCP tools
+
+| Tool | Behavior |
+|------|----------|
+| `get_asset_status` | Returns operational status from in-memory demo data |
+| `get_maintenance_history` | Returns maintenance history from in-memory demo data |
+| `create_maintenance_ticket` | **Simulated write/action tool** — returns a ticket payload; does **not** persist to a database or call an external enterprise API |
+
 ### What is intentionally not implemented yet
 
-- SQL Agent
-- MCP tool agent
-- Human-in-the-loop approvals
+- Write persistence for action tools (DB or real enterprise API)
+- Human-in-the-loop / approval before sensitive actions
+- SQL agent and SQL security controls
+- JWT / RBAC / authenticated tenant context
+- Real external enterprise system integration beyond local MCP demo data
 - Multi-agent supervisor orchestration
 - Conversation memory / checkpoint persistence
 - Langfuse / full observability traces
@@ -282,6 +352,14 @@ Current responsibility:
 
 Qdrant remains a retrieval index, not the primary application database.
 
+### MCP server (`/mcp`)
+
+Current responsibility:
+
+- Local stdio MCP server for maintenance demo tools
+- Structured tool schemas and outputs
+- In-memory / simulated operational data for Sprint 4 demos
+
 ## Health Model
 
 ```text
@@ -321,6 +399,8 @@ Integration tests use a dedicated PostgreSQL database:
 agentic_ai_test
 ```
 
+18 tests currently pass (`cd backend && uv run pytest -q`).
+
 Retrieval evaluation is separate from unit/integration tests:
 
 ```text
@@ -334,8 +414,9 @@ evals/results/retrieval_results.json
 The golden set is intentionally small and is a reproducible Sprint 2 artifact,
 not a large-scale production benchmark.
 
-Critical agent API tests cover graph result mapping, invalid `retrieval_mode`
-validation (422), and controlled graph failure handling (503).
+Critical agent API tests cover graph result mapping for `knowledge`, `tool`,
+and `unsupported`, invalid `retrieval_mode` validation (422), and controlled
+graph failure handling (503).
 
 ## CI Architecture
 
@@ -361,6 +442,7 @@ flowchart LR
 - Pydantic
 - LangChain text splitters / Azure OpenAI integrations
 - LangGraph (router-based agent orchestration)
+- MCP Python SDK (stdio client + separate `/mcp` server)
 
 ### Persistence & Retrieval
 
@@ -377,6 +459,7 @@ flowchart LR
 - Docker Compose
 - Redis
 - Azure OpenAI
+- Local MCP server under `/mcp` (stdio)
 
 ### Quality
 
@@ -389,10 +472,10 @@ flowchart LR
 
 ## Planned Target Architecture
 
-The following remains the longer-term direction. Sprint 3 delivers only the
-router-based LangGraph entrypoint above; supervisor-style multi-agent flows,
-MCP tools, SQL agent, HITL, and observability expansion are **not** current
-implementation:
+The following remains the longer-term direction. Sprints 3–4 deliver the
+router-based LangGraph entrypoint with RAG and **local stdio MCP tools**.
+Supervisor-style multi-agent flows, SQL agent, HITL, real enterprise write
+persistence, and observability expansion are **not** current implementation:
 
 ```mermaid
 flowchart TD
@@ -420,9 +503,9 @@ flowchart TD
     Graph --> Evals[Evaluation Layer]
 ```
 
-Planned components such as MCP tools, HITL, React UI, cloud deployment, and
-supervisor-style agent expansion will only be marked as implemented after their
-corresponding sprint is completed.
+Planned components such as HITL, JWT/RBAC, SQL security, React UI, cloud
+deployment, and supervisor-style agent expansion will only be marked as
+implemented after their corresponding sprint is completed.
 
 ## Architecture Principles
 
@@ -435,7 +518,7 @@ The project is designed around:
 - Testability
 - CI enforcement
 - Measurable retrieval quality
+- Controlled tool execution via MCP (local stdio today)
 - Observability (planned expansion)
-- Secure tool execution (planned)
 - Human approval for sensitive actions (planned)
 - Reproducible local environments

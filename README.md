@@ -9,7 +9,8 @@ The project is being developed incrementally with a focus on software engineerin
 **Sprint 0 — Repository & Architecture Foundation: completed**  
 **Sprint 1 — Enterprise Knowledge Ingestion & RAG v1: completed**  
 **Sprint 2 — Advanced Retrieval & Evaluation: completed**  
-**Sprint 3 — LangGraph Agent Orchestration: completed**
+**Sprint 3 — LangGraph Agent Orchestration: completed**  
+**Sprint 4 — MCP & Enterprise Tool Integration: completed**
 
 Implemented so far:
 
@@ -23,9 +24,11 @@ Implemented so far:
 - Multi-query expansion and multi-query hybrid retrieval
 - Standard and Advanced RAG retrieval modes
 - Retrieval evaluation (Recall@K, MRR, nDCG@K) with persisted results
-- LangGraph router-based agent orchestration (knowledge / unsupported)
-- Agent API reusing the existing RAG pipeline as a capability
-- Health/readiness endpoints, Ruff, pytest, and GitHub Actions CI
+- LangGraph router-based agent orchestration (`knowledge` / `tool` / `unsupported`)
+- Separate MCP server under `/mcp` with stdio transport
+- MCP tool discovery and execution from the backend agent
+- Agent API reusing RAG and MCP tools as capabilities
+- Health/readiness endpoints, Ruff, pytest (18 passing), and GitHub Actions CI
 
 Current RAG retrieval paths:
 
@@ -43,11 +46,13 @@ Current agent orchestration (router graph, not a multi-agent supervisor):
 ```text
 START → LLM Router
           ├── knowledge → RAG Node → Finalize → END
+          ├── tool → MCP Tool Node → Finalize → END
           └── unsupported → Fallback → END
 ```
 
-MCP tool agents, SQL agent, human-in-the-loop, conversation memory, Langfuse,
-frontend development, and cloud deployment remain planned for upcoming sprints.
+The router selects the capability category; the MCP Tool Node's LLM then selects
+the specific MCP tool. Write persistence, HITL/approval, SQL security, and real
+external enterprise system integration remain planned.
 
 More detail: [`docs/project-plan.md`](docs/project-plan.md) · [`docs/architecture.md`](docs/architecture.md)
 
@@ -82,6 +87,8 @@ flowchart TD
     RagAPI --> Azure[Azure OpenAI]
     AgentAPI --> LangGraph[LangGraph Router]
     LangGraph --> RagAPI
+    LangGraph --> MCPClient[MCP Client stdio]
+    MCPClient --> MCPServer[MCP Server /mcp]
     LangGraph --> Azure
 
     HealthAPI --> PostgreSQL
@@ -136,6 +143,7 @@ UNIQUE (tenant_id, email)
 - FastEmbed BM25 (sparse)
 - CrossEncoder reranker
 - LangGraph (router-based orchestration)
+- MCP (stdio tool server under `/mcp`)
 
 ### Quality
 
@@ -286,8 +294,9 @@ RAG accepts `retrieval_mode`:
 POST /api/v1/tenants/{tenant_id}/agent
 ```
 
-Router-based LangGraph orchestration. Supports the same `retrieval_mode`
-values as RAG. Returns `{ route, answer }`. Graph execution failures map to HTTP 503.
+Router-based LangGraph orchestration with `knowledge`, `tool`, and
+`unsupported` routes. Supports the same `retrieval_mode` values as RAG.
+Returns `{ route, answer }`. Graph execution failures map to HTTP 503.
 
 ## Testing
 
@@ -302,6 +311,8 @@ Run:
 ```bash
 cd backend && uv run pytest -q
 ```
+
+18 tests currently pass.
 
 ### Retrieval evaluation
 
@@ -340,10 +351,10 @@ dependency install → Ruff lint → Ruff format check → pytest
 - **Sprint 1** — Enterprise knowledge ingestion & RAG v1
 - **Sprint 2** — Advanced retrieval & evaluation
 - **Sprint 3** — LangGraph agent orchestration (router graph)
+- **Sprint 4** — MCP & enterprise tool integration
 
 ### Planned
 
-- **Sprint 4** — MCP & enterprise tool integration
 - **Sprint 5** — SQL agent, security & human-in-the-loop
 - **Sprint 6** — Observability & broader evaluation gates
 - **Sprint 7–10** — Frontend, Azure deployment, multimodal demo, portfolio polish

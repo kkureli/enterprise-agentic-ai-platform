@@ -1,7 +1,7 @@
 from typing import Literal, TypedDict
 from uuid import UUID
 
-AgentRoute = Literal["knowledge", "unsupported"]
+AgentRoute = Literal["knowledge", "tool", "unsupported"]
 RetrievalMode = Literal["standard", "advanced"]
 
 
@@ -13,4 +13,5 @@ class AgentState(TypedDict, total=False):
     route: AgentRoute
 
     rag_answer: str
+    tool_answer: str
     final_answer: str

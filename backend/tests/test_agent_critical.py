@@ -10,6 +10,10 @@ import pytest
             "AX-4317 indicates hydraulic pressure loss.",
         ),
         (
+            "tool",
+            "MACHINE-42 is currently in warning state.",
+        ),
+        (
             "unsupported",
             "This request is not supported yet.",
         ),

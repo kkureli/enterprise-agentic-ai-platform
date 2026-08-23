@@ -1,13 +1,13 @@
-from typing import Literal
-
 from pydantic import BaseModel, Field
+
+from app.agents.state import AgentRoute, RetrievalMode
 
 
 class AgentRequest(BaseModel):
     question: str = Field(min_length=2, max_length=2000)
-    retrieval_mode: Literal["standard", "advanced"] = "standard"
+    retrieval_mode: RetrievalMode = "standard"
 
 
 class AgentResponse(BaseModel):
-    route: Literal["knowledge", "unsupported"]
+    route: AgentRoute
     answer: str
