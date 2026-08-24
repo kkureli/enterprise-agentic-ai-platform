@@ -9,6 +9,10 @@ from app.services.mcp_client import (
     list_maintenance_tools,
 )
 
+APPROVAL_REQUIRED_TOOLS = {
+    "create_maintenance_ticket",
+}
+
 SYSTEM_PROMPT = """
 You are an enterprise operations assistant.
 
@@ -61,6 +65,16 @@ async def mcp_tool_node(state: AgentState) -> dict:
 
     if tool_call["name"] not in allowed_tools:
         raise RuntimeError(f"Unknown MCP tool requested: {tool_call['name']}")
+
+    if tool_call["name"] in APPROVAL_REQUIRED_TOOLS:
+        return {
+            "requires_approval": True,
+            "pending_action": {
+                "tool_name": tool_call["name"],
+                "arguments": tool_call["args"],
+            },
+            "tool_answer": ("This action requires human approval before execution."),
+        }
 
     result = await call_maintenance_tool(
         tool_call["name"],

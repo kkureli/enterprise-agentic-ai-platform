@@ -1,12 +1,15 @@
 # Architecture
 
-## Current Architecture — Sprint 0–4
+## Current Architecture — Sprint 0–5
 
 The platform currently provides a multi-tenant FastAPI backend with document
 ingestion, hybrid retrieval, reranking, multi-query RAG modes, retrieval
-evaluation, and a **router-based LangGraph agent** with knowledge (RAG) and
-tool (MCP) routes. SQL Agent, HITL/approval, write persistence to real
-enterprise systems, conversation memory, and Langfuse remain planned.
+evaluation, a **router-based LangGraph agent** with knowledge (RAG), SQL, and
+MCP tool routes, plus **HITL approval** for write actions that persist
+maintenance tickets to PostgreSQL.
+
+JWT/RBAC, persistent production checkpoint storage, cloud deployment, and
+Langfuse remain planned — production deployment is **not** complete.
 
 ```mermaid
 flowchart TD
@@ -43,8 +46,13 @@ flowchart TD
 
     AgentAPI --> Graph[LangGraph Router Graph]
     Graph -->|knowledge| RagReuse[Reuse RAG Pipeline]
+    Graph -->|sql| SQLNode[SQL Node]
     Graph -->|tool| MCPToolNode[MCP Tool Node]
     Graph -->|unsupported| Fallback[Fallback Node]
+    MCPToolNode -->|write| Approval[Approval Interrupt]
+    Approval -->|approved| ApprovedAction[Approved Action]
+    ApprovedAction --> PostgreSQL
+    SQLNode --> PostgreSQL
     RagReuse --> Mode
     MCPToolNode --> MCPClient[Backend MCP Client]
     MCPClient -->|stdio| MCPServer[MCP Server /mcp]
@@ -133,11 +141,11 @@ Grounded Answer + Sources
 CrossEncoder always receives the original user query. Expansion queries are used
 only for candidate retrieval.
 
-## Agent Orchestration (Sprint 3–4)
+## Agent Orchestration (Sprint 3–5)
 
 The agent layer is a **router-based LangGraph graph**, not a full multi-agent
-supervisor. RAG and MCP tools are invoked as capabilities; retrieval/generation
-and MCP protocol details are not reimplemented as REST APIs inside the graph.
+supervisor. RAG, SQL, and MCP tools are capabilities; MCP does not expose REST
+endpoints.
 
 ### Implemented graph
 
@@ -146,7 +154,12 @@ START
   ↓
 LLM Router
   ├── knowledge → RAG Node → Finalize → END
-  ├── tool → MCP Tool Node → Finalize → END
+  ├── sql → SQL Node → Finalize → END
+  ├── tool → MCP Tool Node
+  │            ├── (read tool) → Finalize → END
+  │            └── (write tool) → Approval
+  │                                 ├── approved → Approved Action → Finalize → END
+  │                                 └── rejected → Finalize → END
   └── unsupported → Fallback → END
 ```
 
@@ -154,13 +167,14 @@ LLM Router
 
 1. The **LLM Router** selects the capability category:
    - `knowledge` — enterprise documents / knowledge base
-   - `tool` — current operational data or enterprise tool actions via MCP
+   - `sql` — structured operational data in PostgreSQL
+   - `tool` — MCP tools / enterprise actions (writes require HITL)
    - `unsupported` — capabilities not currently available
-2. On the `tool` path, the **MCP Tool Node's LLM** selects the specific MCP tool
-   using schemas discovered from the MCP server.
-3. **MCP itself does not create REST endpoints.** Tools are exposed over the
-   MCP protocol; the only HTTP surface for agents remains
-   `POST /api/v1/tenants/{tenant_id}/agent`.
+2. On the `tool` path, the **MCP Tool Node's LLM** selects the specific MCP tool.
+3. On the `sql` path, the SQL node generates, validates, and executes read-only SQL.
+4. **MCP itself does not create REST endpoints.** Agent HTTP surfaces are:
+   - `POST /api/v1/tenants/{tenant_id}/agent`
+   - `POST /api/v1/tenants/{tenant_id}/agent/{thread_id}/approval`
 
 ### Shared state
 
@@ -168,31 +182,133 @@ LLM Router
 AgentState
 ├── tenant_id
 ├── query
-├── retrieval_mode   # standard | advanced
-├── route            # knowledge | tool | unsupported
+├── retrieval_mode      # standard | advanced
+├── route               # knowledge | sql | tool | unsupported
+├── requires_approval
+├── pending_action
+├── approval_granted
+├── action_result
+├── generated_sql
 ├── rag_answer
 ├── tool_answer
+├── sql_answer
 └── final_answer
 ```
 
-### Request path
+### Agent request path
 
 ```text
 POST /api/v1/tenants/{tenant_id}/agent
   ↓
 Validate tenant + payload
   ↓
-agent_graph.ainvoke({ tenant_id, query, retrieval_mode })
+thread_id = new UUID
   ↓
-{ route, answer }
+agent_graph.ainvoke(..., config={configurable: {thread_id}})
+  ↓
+├── __interrupt__ → { thread_id, status=approval_required, route, answer, pending_action }
+└── completed     → { thread_id, status=completed, route, answer }
 ```
 
-Failure handling:
+Approval resume:
+
+```text
+POST /api/v1/tenants/{tenant_id}/agent/{thread_id}/approval
+  body: { "approved": true|false }
+  ↓
+Verify checkpoint exists, tenant matches, next == approval
+  ↓
+agent_graph.ainvoke(Command(resume={"approved": ...}), config={thread_id})
+  ↓
+{ thread_id, status=completed, route, answer }
+```
+
+Failure / conflict handling:
 
 - invalid `retrieval_mode` → HTTP 422
+- missing / wrong-tenant thread → HTTP 404
+- thread not waiting for approval → HTTP 409
 - graph execution exception → HTTP 503 (`Agent execution failed.`)
 
-## MCP & Enterprise Tool Integration (Sprint 4)
+### Checkpoints
+
+The compiled graph uses LangGraph **`InMemorySaver`** for local development.
+
+This is **not** production-ready: process restarts lose paused approval threads.
+Replace with persistent checkpoint storage (e.g. Postgres or Redis-backed
+checkpointer) before production deployment.
+
+## SQL Agent (Sprint 5)
+
+### Natural language → SQL pipeline
+
+```text
+User question
+  ↓
+generate_sql()          # LLM structured SELECT
+  ↓
+validate_readonly_sql() # SQLGlot
+  ↓
+SET TRANSACTION READ ONLY
+  ↓
+execute with :tenant_id + outer LIMIT
+  ↓
+LLM answer grounded on returned rows
+```
+
+### SQLGlot validation rules
+
+- Exactly one statement
+- `SELECT` only
+- Tables limited to `assets`, `maintenance_records`, `maintenance_tickets`
+- Required `WHERE` with `:tenant_id` bind parameter
+- Every table/alias in joins must be tenant-scoped
+- `OR` in `WHERE` disallowed (tenant-filter bypass prevention)
+- Host applies an outer `LIMIT` (default 100)
+
+### PostgreSQL read-only transaction
+
+Before executing generated SQL, the session runs:
+
+```sql
+SET TRANSACTION READ ONLY
+```
+
+This is a second enforcement layer: even if application validation were bypassed,
+writes in that transaction fail at the database.
+
+## HITL & Approved Writes (Sprint 5)
+
+### Host interception of MCP write tools
+
+Sensitive tools such as `create_maintenance_ticket` are listed in
+`APPROVAL_REQUIRED_TOOLS` inside `mcp_tool_node`. When selected:
+
+1. The host **does not** call MCP `call_tool` for that write.
+2. State is set with `requires_approval=True` and `pending_action`.
+3. The graph routes to the approval node, which calls LangGraph `interrupt(...)`.
+
+The MCP server’s `create_maintenance_ticket` raises if invoked directly, so the
+MCP path **cannot bypass** host approval. Persistence happens only in the host
+via `approved_action_service` → `maintenance_ticket_service` after approval.
+
+### Approved action execution
+
+On `Command(resume={"approved": true})`:
+
+```text
+approved_action_node
+  ↓
+execute_approved_action(tenant_id, pending_action)
+  ↓
+create_maintenance_ticket(...) → PostgreSQL INSERT (commit)
+  ↓
+tool_answer confirms ticket id / priority → Finalize
+```
+
+On rejection, the graph finalizes with a rejection message and **no** DB write.
+
+## MCP & Enterprise Tool Integration (Sprint 4–5)
 
 ### Separate MCP server project
 
@@ -215,13 +331,13 @@ MCP server process
 
 - Opens a stdio session to the MCP server
 - Discovers tools via `list_tools()`
-- Executes tools via `call_tool(name, arguments)`
+- Executes tools via `call_tool(name, arguments)` (read tools only in practice)
 - Consumes structured tool outputs (`structured_content`)
 
-### Tool-calling loop (MCP Tool Node)
+### Read tool-calling loop
 
 ```text
-User request (tool route)
+User request (tool route, non-write)
   ↓
 list_tools() → bind MCP schemas to chat model
   ↓
@@ -238,21 +354,20 @@ LLM final answer → tool_answer → Finalize
 
 | Tool | Behavior |
 |------|----------|
-| `get_asset_status` | Returns operational status from in-memory demo data |
-| `get_maintenance_history` | Returns maintenance history from in-memory demo data |
-| `create_maintenance_ticket` | **Simulated write/action tool** — returns a ticket payload; does **not** persist to a database or call an external enterprise API |
+| `get_asset_status` | Demo operational status via MCP (in-memory server data) |
+| `get_maintenance_history` | Demo maintenance history via MCP (in-memory server data) |
+| `create_maintenance_ticket` | Schema advertised for LLM selection; **host-intercepted**; after HITL approval, host persists a real ticket in PostgreSQL. MCP cannot execute the write. |
 
 ### What is intentionally not implemented yet
 
-- Write persistence for action tools (DB or real enterprise API)
-- Human-in-the-loop / approval before sensitive actions
-- SQL agent and SQL security controls
 - JWT / RBAC / authenticated tenant context
-- Real external enterprise system integration beyond local MCP demo data
+- Persistent production checkpointer (current: `InMemorySaver`)
+- Cloud / Azure production deployment
+- Real external enterprise APIs beyond local PostgreSQL + MCP demo
 - Multi-agent supervisor orchestration
-- Conversation memory / checkpoint persistence
 - Langfuse / full observability traces
 - Automatic retry policies
+- React approval UI
 
 ## Multi-Tenant Data Model
 
@@ -260,6 +375,11 @@ LLM final answer → tool_answer → Finalize
 erDiagram
     TENANT ||--o{ USER : has
     TENANT ||--o{ DOCUMENT : owns
+    TENANT ||--o{ ASSET : owns
+    TENANT ||--o{ MAINTENANCE_RECORD : owns
+    TENANT ||--o{ MAINTENANCE_TICKET : owns
+    ASSET ||--o{ MAINTENANCE_RECORD : has
+    ASSET ||--o{ MAINTENANCE_TICKET : has
 
     TENANT {
         uuid id PK
@@ -288,6 +408,35 @@ erDiagram
         datetime created_at
         datetime updated_at
     }
+
+    ASSET {
+        uuid id PK
+        uuid tenant_id FK
+        string asset_code
+        string name
+        string location
+        string status
+        string active_error_code
+    }
+
+    MAINTENANCE_RECORD {
+        uuid id PK
+        uuid tenant_id FK
+        uuid asset_id FK
+        date maintenance_date
+        string maintenance_type
+        text description
+        string technician
+    }
+
+    MAINTENANCE_TICKET {
+        uuid id PK
+        uuid tenant_id FK
+        uuid asset_id FK
+        text issue
+        string priority
+        string status
+    }
 ```
 
 User email uniqueness is tenant-scoped:
@@ -296,26 +445,22 @@ User email uniqueness is tenant-scoped:
 UNIQUE (tenant_id, email)
 ```
 
-## Tenant Isolation
-
-Documents, retrieval, and RAG are tenant-scoped.
-
-Qdrant queries always include a `tenant_id` payload filter. Optional metadata
-filters (`document_id`, `filename`) compose with that tenant boundary.
-
-Conceptually:
+Asset codes are unique per tenant:
 
 ```text
-Tenant A
- ├── Documents A*
- └── Chunks A*
-
-Tenant B
- ├── Documents B*
- └── Chunks B*
+UNIQUE (tenant_id, asset_code)
 ```
 
-A request for Tenant A must never return Tenant B chunks.
+## Tenant Isolation
+
+Documents, retrieval, RAG, SQL queries, and ticket writes are tenant-scoped.
+
+- Qdrant queries always include a `tenant_id` payload filter
+- SQL agent requires `:tenant_id` filters validated by SQLGlot
+- Ticket creation resolves assets and inserts tickets under the request `tenant_id`
+- Approval resume verifies the checkpointed `tenant_id` matches the URL tenant
+
+A request for Tenant A must never return Tenant B chunks or operational rows.
 
 ## Infrastructure
 
@@ -325,20 +470,18 @@ Local infrastructure is orchestrated through Docker Compose.
 
 Current responsibility:
 
-- Tenant data
-- User data
-- Document metadata
-- Relational application state
+- Tenant / user / document metadata
+- Operational assets, maintenance records, and tickets
+- Relational source of truth for approved write actions
 
 ### Redis
 
 Currently provisioned and validated through the readiness endpoint.
 
-Planned responsibilities (not yet implemented):
+Planned responsibilities (not yet used for agent checkpoints):
 
 - Caching
-- Transient agent state
-- Checkpoint support
+- Persistent / shared agent checkpoint support
 - Rate limiting
 
 ### Qdrant
@@ -356,9 +499,8 @@ Qdrant remains a retrieval index, not the primary application database.
 
 Current responsibility:
 
-- Local stdio MCP server for maintenance demo tools
-- Structured tool schemas and outputs
-- In-memory / simulated operational data for Sprint 4 demos
+- Local stdio MCP server for maintenance tool schemas / read demos
+- Write tools are host-gated; MCP does not persist tickets
 
 ## Health Model
 
@@ -389,6 +531,9 @@ create tenants table
 create users table
         ↓
 create documents table
+        ↓
+add operational maintenance tables
+  (assets, maintenance_records, maintenance_tickets)
 ```
 
 ## Testing Architecture
@@ -399,7 +544,7 @@ Integration tests use a dedicated PostgreSQL database:
 agentic_ai_test
 ```
 
-18 tests currently pass (`cd backend && uv run pytest -q`).
+21 tests currently pass (`cd backend && uv run pytest -q`).
 
 Retrieval evaluation is separate from unit/integration tests:
 
@@ -414,9 +559,9 @@ evals/results/retrieval_results.json
 The golden set is intentionally small and is a reproducible Sprint 2 artifact,
 not a large-scale production benchmark.
 
-Critical agent API tests cover graph result mapping for `knowledge`, `tool`,
-and `unsupported`, invalid `retrieval_mode` validation (422), and controlled
-graph failure handling (503).
+Critical agent API tests cover graph result mapping (including approval-required
+tool paths), invalid `retrieval_mode` validation (422), and controlled graph
+failure handling (503).
 
 ## CI Architecture
 
@@ -441,8 +586,9 @@ flowchart LR
 - FastAPI
 - Pydantic
 - LangChain text splitters / Azure OpenAI integrations
-- LangGraph (router-based agent orchestration)
+- LangGraph (router + interrupt / Command resume)
 - MCP Python SDK (stdio client + separate `/mcp` server)
+- SQLGlot
 
 ### Persistence & Retrieval
 
@@ -460,6 +606,7 @@ flowchart LR
 - Redis
 - Azure OpenAI
 - Local MCP server under `/mcp` (stdio)
+- LangGraph `InMemorySaver` (dev checkpoints only)
 
 ### Quality
 
@@ -472,10 +619,10 @@ flowchart LR
 
 ## Planned Target Architecture
 
-The following remains the longer-term direction. Sprints 3–4 deliver the
-router-based LangGraph entrypoint with RAG and **local stdio MCP tools**.
-Supervisor-style multi-agent flows, SQL agent, HITL, real enterprise write
-persistence, and observability expansion are **not** current implementation:
+The following remains the longer-term direction. Sprints 3–5 deliver the
+router-based LangGraph entrypoint with RAG, SQL, MCP tools, and HITL writes to
+local PostgreSQL. Persistent production checkpoints, JWT/RBAC, cloud deployment,
+and observability expansion are **not** current implementation:
 
 ```mermaid
 flowchart TD
@@ -503,7 +650,7 @@ flowchart TD
     Graph --> Evals[Evaluation Layer]
 ```
 
-Planned components such as HITL, JWT/RBAC, SQL security, React UI, cloud
+Planned components such as JWT/RBAC, persistent checkpointers, React UI, cloud
 deployment, and supervisor-style agent expansion will only be marked as
 implemented after their corresponding sprint is completed.
 
@@ -518,7 +665,8 @@ The project is designed around:
 - Testability
 - CI enforcement
 - Measurable retrieval quality
-- Controlled tool execution via MCP (local stdio today)
+- Controlled SQL execution (SQLGlot + read-only transactions)
+- Controlled tool execution via MCP with host-gated writes
+- Human approval for sensitive actions
 - Observability (planned expansion)
-- Human approval for sensitive actions (planned)
 - Reproducible local environments

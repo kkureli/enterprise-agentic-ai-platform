@@ -1,36 +1,59 @@
-from typing import Literal
-
 from pydantic import BaseModel
 
-from app.agents.state import AgentState
+from app.agents.state import AgentRoute, AgentState
 from app.services.llm_service import get_chat_model
 
 
 class RouteDecision(BaseModel):
-    route: Literal["knowledge", "tool", "unsupported"]
+    route: AgentRoute
 
 
-SYSTEM_PROMPT = """
-You are a router for an enterprise operations AI system.
+ROUTER_SYSTEM_PROMPT = """
+You are a routing component for an enterprise AI operations platform.
 
-Classify the user's request into exactly one route:
+Choose exactly one route:
 
-- knowledge:
-  Use when the request asks for information that should be answered
-  from enterprise documents, policies, manuals, procedures, or
-  internal knowledge-base content.
+knowledge:
+Use for questions that require enterprise knowledge documents,
+policies, manuals, procedures, troubleshooting guides, or internal
+knowledge base content.
 
-- tool:
-  Use when the request requires current operational data or an
-  enterprise system capability that can be obtained through available
-  operational tools, such as checking the current status of an asset.
+sql:
+Use for questions that require querying structured operational data
+stored in the database, such as:
+- asset lists or statuses
+- maintenance history
+- counts and aggregates
+- maintenance tickets already stored in the system
+- filtering operational records
+- questions about historical structured data
 
-- unsupported:
-  Use when the request requires a capability that is not currently
-  available.
+tool:
+Use when the user wants to perform an action or use a live enterprise
+capability, such as:
+- creating a maintenance ticket
+- invoking an operational tool
+- performing an enterprise system action
 
-Do not answer the user's question.
-Only classify the request.
+unsupported:
+Use when the request cannot be answered or performed using the
+available enterprise capabilities.
+
+Important distinctions:
+
+"What does error AX-4317 mean?"
+→ knowledge
+
+"How many maintenance records does MACHINE-42 have?"
+→ sql
+
+"Show the maintenance history for MACHINE-42."
+→ sql
+
+"Create a maintenance ticket for MACHINE-42."
+→ tool
+
+Return only the structured routing decision.
 """.strip()
 
 
@@ -39,7 +62,7 @@ async def router_node(state: AgentState) -> dict:
 
     result = await model.ainvoke(
         [
-            ("system", SYSTEM_PROMPT),
+            ("system", ROUTER_SYSTEM_PROMPT),
             ("human", state["query"]),
         ]
     )

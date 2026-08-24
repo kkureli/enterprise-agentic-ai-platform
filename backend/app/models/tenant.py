@@ -48,3 +48,21 @@ class Tenant(Base):
         back_populates="tenant",
         cascade="all, delete-orphan",
     )
+
+    assets = relationship(
+        "Asset",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+    )
+
+    maintenance_records = relationship(
+        "MaintenanceRecord",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+    )
+
+    maintenance_tickets = relationship(
+        "MaintenanceTicket",
+        back_populates="tenant",
+        cascade="all, delete-orphan",
+    )

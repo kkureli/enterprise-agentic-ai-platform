@@ -4,7 +4,7 @@ This document tracks the implementation roadmap for the **Enterprise Agentic AI 
 
 The project is intentionally built in incremental sprints. A capability is only marked as complete after it is implemented and verified locally.
 
-**Current progress:** Sprint 0 ✅ · Sprint 1 ✅ · Sprint 2 ✅ · Sprint 3 ✅ · Sprint 4 ✅ · Sprint 5+ ⬜ planned
+**Current progress:** Sprint 0 ✅ · Sprint 1 ✅ · Sprint 2 ✅ · Sprint 3 ✅ · Sprint 4 ✅ · Sprint 5 ✅ · Sprint 6+ ⬜ planned
 
 ## Status Legend
 
@@ -525,7 +525,7 @@ or Sprint 5 security/HITL features.
 |------|---------|-------------|
 | `get_asset_status` | Current operational status for an asset | Read from in-memory demo data |
 | `get_maintenance_history` | Maintenance history for an asset | Read from in-memory demo data |
-| `create_maintenance_ticket` | Create a maintenance ticket | **Simulated write** — does **not** persist to a DB or external enterprise API |
+| `create_maintenance_ticket` | Create a maintenance ticket | Sprint 4: simulated / non-persisting. **Sprint 5:** host intercepts write tools, requires HITL, then persists to PostgreSQL (MCP cannot bypass approval) |
 
 ## 4.3 Backend MCP Client
 
@@ -559,7 +559,7 @@ Routing responsibilities:
 - The **MCP Tool Node's LLM** then selects the specific MCP tool.
 - MCP itself does not create REST endpoints.
 
-## 4.5 Current Graph
+## 4.5 Graph at end of Sprint 4
 
 ```text
 START
@@ -570,14 +570,17 @@ LLM Router
   └── unsupported → Fallback → END
 ```
 
+Sprint 5 extends this with `sql`, HITL approval, and approved-action persistence.
+See Sprint 5 for the current graph.
+
 ## 4.6 Agent API
 
 - ✅ `POST /api/v1/tenants/{tenant_id}/agent` supports the `tool` route
-- ✅ Response continues to return `{ route, answer }`
+- ✅ Response continues to return `{ route, answer }` (Sprint 5 adds `thread_id`, `status`, `pending_action`)
 
 ## 4.7 Tests
 
-- ✅ 18 tests currently pass (`cd backend && uv run pytest -q`)
+- ✅ Tests green at Sprint 4 close (later Sprint 5 suite: 21 passing)
 
 ## Sprint 4 Definition of Done
 
@@ -592,53 +595,161 @@ Router can select the tool capability route
         ↓
 MCP Tool Node binds schemas, calls MCP, returns ToolMessage → final answer
         ↓
-create_maintenance_ticket is documented as simulated (no DB / external API write)
-        ↓
 Agent API returns route + answer for tool requests; tests remain green
 ```
 
-**Not in Sprint 4 (still planned):** write persistence to a real DB or enterprise
-API, HITL/approval gates, SQL agent & SQL security, JWT/RBAC, real external
-enterprise system integration, conversation memory, or Langfuse.
+**Not in Sprint 4 (delivered in Sprint 5 or still planned):** real write
+persistence + HITL, SQL agent & SQLGlot security, JWT/RBAC, production
+checkpoint storage, cloud deployment, or Langfuse.
 
 ---
 
 # Sprint 5 — SQL Agent, Security & Human-in-the-Loop
 
-**Status: ⬜ Planned**
+**Status: ✅ Completed**
 
-**Goal:** Introduce controlled data access and approval-sensitive actions.
+**Goal:** Introduce controlled structured data access (NL → SQL), SQL validation
+and tenant isolation, real maintenance-ticket persistence, and human approval
+for write actions. Production deployment and persistent checkpoint storage are
+**not** claimed as complete.
 
-## SQL / Data Agent
+## 5.1 Operational PostgreSQL Models
 
-- ⬜ Natural language → database intent
-- ⬜ Read-only SQL execution
-- ⬜ Query validation
-- ⬜ Result formatting
-- ⬜ Tenant data isolation
+- ✅ Alembic migration for operational maintenance tables
+- ✅ Tenant-scoped SQLAlchemy models:
+  - `assets` — `asset_code`, name, location, status, `active_error_code`
+  - `maintenance_records` — dated history rows linked to assets
+  - `maintenance_tickets` — issue / priority / status tickets linked to assets
+- ✅ Seed script for local operational demo data (`scripts/seed_operational_data.py`)
 
-## Security
+```text
+Tenant
+ ├── Users
+ ├── Documents / Vector Chunks
+ └── Operational data
+      ├── Assets
+      ├── Maintenance Records
+      └── Maintenance Tickets
+```
 
-- ⬜ JWT authentication
-- ⬜ RBAC
-- ⬜ Tenant context from authenticated identity
-- ⬜ Tool permissions
-- ⬜ Prompt injection defenses
-- ⬜ Input validation
-- ⬜ Audit trail
-- ⬜ SQL security controls
+## 5.2 Natural Language → SQL Pipeline
 
-## Human-in-the-Loop
+- ✅ `sql` LangGraph route + `sql_node`
+- ✅ LLM SQL generation (`sql_generation_service`) — structured SELECT only
+- ✅ SQLGlot validation (`validate_readonly_sql`) before execution
+- ✅ Read-only execution with row limit (`execute_readonly_sql`)
+- ✅ PostgreSQL `SET TRANSACTION READ ONLY` on the execution session
+- ✅ Result → LLM natural-language answer (`sql_agent_service`)
 
-- ⬜ Pause before sensitive actions
-- ⬜ Human approval
-- ⬜ Resume workflow
-- ⬜ Redis-backed transient workflow state
+Pipeline:
 
-## Enterprise Write Persistence (planned)
+```text
+User question
+  ↓
+generate_sql()  (LLM, structured SELECT)
+  ↓
+validate_readonly_sql()  (SQLGlot)
+  ↓
+SET TRANSACTION READ ONLY + execute with :tenant_id / LIMIT
+  ↓
+LLM answer grounded on returned rows
+```
 
-- ⬜ Persist write/action tools (e.g. tickets) to a DB or real external enterprise API
-- ⬜ Real external enterprise system integration beyond local MCP demo data
+SQL security controls (application + DB):
+
+- Exactly one statement; SELECT only
+- Allowed tables only: `assets`, `maintenance_records`, `maintenance_tickets`
+- Required `WHERE` with `:tenant_id` bind parameter (no hardcoded tenant UUIDs)
+- Single-table and join queries must be tenant-scoped per table/alias
+- `OR` in `WHERE` disallowed for tenant-scope bypass prevention
+- Outer `LIMIT` applied by the host
+- PostgreSQL read-only transaction as a second enforcement layer
+
+## 5.3 Human-in-the-Loop Write Actions
+
+- ✅ Write tools (e.g. `create_maintenance_ticket`) are **intercepted by the host**
+  in `mcp_tool_node` — they are **not** executed via MCP `call_tool`
+- ✅ MCP server write tool raises if invoked directly; approval cannot be bypassed
+  through the MCP path
+- ✅ Pending action stored in graph state; graph pauses with LangGraph `interrupt`
+- ✅ Resume via `Command(resume={"approved": true|false})` and `thread_id` config
+- ✅ Checkpointer: **`InMemorySaver` (development only)** — must be replaced with
+  persistent checkpoint storage before production use
+- ✅ Approval API: `POST /api/v1/tenants/{tenant_id}/agent/{thread_id}/approval`
+- ✅ On approve → `approved_action_node` → `create_maintenance_ticket` persists to PostgreSQL
+- ✅ On reject → controlled rejection message; no write
+
+HITL flow:
+
+```text
+tool route → MCP Tool Node selects create_maintenance_ticket
+  ↓
+Host intercepts (requires_approval + pending_action)
+  ↓
+approval node → interrupt(...)
+  ↓
+API returns status=approval_required + thread_id + pending_action
+  ↓
+POST .../agent/{thread_id}/approval  { "approved": true|false }
+  ↓
+Command(resume=...) restores checkpointed thread
+  ├── approved → approved_action → PostgreSQL ticket insert → finalize
+  └── rejected → finalize with rejection message
+```
+
+## 5.4 Current Graph
+
+```text
+START
+  ↓
+LLM Router
+  ├── knowledge → RAG Node → Finalize → END
+  ├── sql → SQL Node → Finalize → END
+  ├── tool → MCP Tool Node
+  │            ├── (read tool) → Finalize → END
+  │            └── (write tool) → Approval
+  │                                 ├── approved → Approved Action → Finalize → END
+  │                                 └── rejected → Finalize → END
+  └── unsupported → Fallback → END
+```
+
+## 5.5 Agent API (Sprint 5)
+
+- ✅ `POST /api/v1/tenants/{tenant_id}/agent`
+  - returns `thread_id`, `status` (`completed` | `approval_required`), `route`, `answer`
+  - optional `pending_action` when approval is required
+- ✅ `POST /api/v1/tenants/{tenant_id}/agent/{thread_id}/approval`
+  - body: `{ "approved": boolean }`
+  - resumes the checkpointed graph; tenant must match the paused execution
+
+## 5.6 Tests
+
+- ✅ 21 tests currently pass (`cd backend && uv run pytest -q`)
+
+## Sprint 5 Definition of Done
+
+Sprint 5 is complete when:
+
+```text
+Operational models exist in PostgreSQL (assets / records / tickets)
+        ↓
+NL → SQL → SQLGlot validation → read-only tenant-scoped execution → answer
+        ↓
+sql route is wired in LangGraph
+        ↓
+Write MCP tools are host-intercepted and cannot bypass HITL
+        ↓
+interrupt + Command(resume) + thread_id approval API works
+        ↓
+Approved create_maintenance_ticket persists to PostgreSQL
+        ↓
+InMemorySaver documented as dev-only (not production-ready)
+```
+
+**Not in Sprint 5 (still planned):** JWT authentication, RBAC, Redis/Postgres
+persistent checkpointer for production, cloud deployment, Langfuse / full
+observability, React approval UI, or real external enterprise APIs beyond the
+local PostgreSQL + MCP demo.
 
 ---
 
@@ -759,10 +870,10 @@ Tasks:
 
 # Overall Target Architecture
 
-The diagram below is the long-term target. Sprints 3–4 currently implement a
-router-based LangGraph path (`knowledge` → RAG, `tool` → local MCP tools over
-stdio, `unsupported` → fallback). SQL Agent, HITL, write persistence to real
-enterprise systems, and full observability remain planned.
+The diagram below is the long-term target. Sprints 3–5 implement a router-based
+LangGraph path (`knowledge` → RAG, `sql` → PostgreSQL, `tool` → MCP with HITL
+for writes, `unsupported` → fallback). Persistent production checkpoints,
+JWT/RBAC, cloud deployment, and full observability remain planned.
 
 ```text
                          User

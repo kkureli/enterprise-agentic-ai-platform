@@ -10,49 +10,40 @@ The project is being developed incrementally with a focus on software engineerin
 **Sprint 1 — Enterprise Knowledge Ingestion & RAG v1: completed**  
 **Sprint 2 — Advanced Retrieval & Evaluation: completed**  
 **Sprint 3 — LangGraph Agent Orchestration: completed**  
-**Sprint 4 — MCP & Enterprise Tool Integration: completed**
+**Sprint 4 — MCP & Enterprise Tool Integration: completed**  
+**Sprint 5 — SQL Agent, Security & Human-in-the-Loop: completed**
 
 Implemented so far:
 
 - FastAPI backend with tenant-scoped APIs
 - Async SQLAlchemy 2 + PostgreSQL + Alembic
+- Operational models: `assets`, `maintenance_records`, `maintenance_tickets`
 - Redis and Qdrant infrastructure
 - Document upload, parsing, chunking, and Azure OpenAI embeddings
-- Dense + sparse hybrid retrieval with weighted RRF
-- Query-aware dense/sparse weighting
-- CrossEncoder reranking with retrieval-aware final rank fusion
-- Multi-query expansion and multi-query hybrid retrieval
-- Standard and Advanced RAG retrieval modes
+- Dense + sparse hybrid retrieval with weighted RRF, reranking, multi-query RAG
 - Retrieval evaluation (Recall@K, MRR, nDCG@K) with persisted results
-- LangGraph router-based agent orchestration (`knowledge` / `tool` / `unsupported`)
-- Separate MCP server under `/mcp` with stdio transport
-- MCP tool discovery and execution from the backend agent
-- Agent API reusing RAG and MCP tools as capabilities
-- Health/readiness endpoints, Ruff, pytest (18 passing), and GitHub Actions CI
+- LangGraph routes: `knowledge` / `sql` / `tool` / `unsupported`
+- NL → SQL pipeline with SQLGlot validation, tenant scoping, and read-only transactions
+- Separate MCP server under `/mcp` (stdio); host intercepts write tools for HITL
+- Real maintenance-ticket persistence after human approval (`interrupt` / `Command(resume=...)`)
+- Agent approval API with `thread_id` checkpoints (`InMemorySaver` — development only)
+- Health/readiness endpoints, Ruff, pytest (21 passing), and GitHub Actions CI
 
-Current RAG retrieval paths:
-
-```text
-Standard (default):
-Query → Hybrid Retrieval → CrossEncoder → Rank Fusion → Top-K → LLM
-
-Advanced:
-Query → Query Expansion → Multi-Query Hybrid → CrossEncoder (original query)
-  → Final Rank Fusion → Top-K → LLM
-```
-
-Current agent orchestration (router graph, not a multi-agent supervisor):
+Current agent orchestration:
 
 ```text
 START → LLM Router
           ├── knowledge → RAG Node → Finalize → END
-          ├── tool → MCP Tool Node → Finalize → END
+          ├── sql → SQL Node → Finalize → END
+          ├── tool → MCP Tool Node
+          │            ├── read → Finalize → END
+          │            └── write → Approval → Approved Action / Reject → Finalize → END
           └── unsupported → Fallback → END
 ```
 
-The router selects the capability category; the MCP Tool Node's LLM then selects
-the specific MCP tool. Write persistence, HITL/approval, SQL security, and real
-external enterprise system integration remain planned.
+Checkpoints use `InMemorySaver` for local development and must be replaced with
+persistent storage before production. JWT/RBAC, cloud deployment, and Langfuse
+remain planned.
 
 More detail: [`docs/project-plan.md`](docs/project-plan.md) · [`docs/architecture.md`](docs/architecture.md)
 
@@ -87,8 +78,12 @@ flowchart TD
     RagAPI --> Azure[Azure OpenAI]
     AgentAPI --> LangGraph[LangGraph Router]
     LangGraph --> RagAPI
+    LangGraph --> SQLAgent[SQL Agent]
+    SQLAgent --> PostgreSQL
     LangGraph --> MCPClient[MCP Client stdio]
     MCPClient --> MCPServer[MCP Server /mcp]
+    LangGraph --> HITL[HITL Approval]
+    HITL --> PostgreSQL
     LangGraph --> Azure
 
     HealthAPI --> PostgreSQL
@@ -110,11 +105,15 @@ flowchart TD
 ```text
 Tenant
  ├── Users
- └── Documents / Vector Chunks
+ ├── Documents / Vector Chunks
+ └── Operational data
+      ├── Assets
+      ├── Maintenance Records
+      └── Maintenance Tickets
 ```
 
-Each user and document belongs to one tenant through `tenant_id`.  
-Retrieval and RAG always apply tenant filters in Qdrant.
+Each user, document, and operational row belongs to one tenant through `tenant_id`.  
+Retrieval/RAG apply tenant filters in Qdrant; SQL agent queries must filter by `:tenant_id`.
 
 User email uniqueness is scoped per tenant:
 
@@ -132,6 +131,7 @@ UNIQUE (tenant_id, email)
 - SQLAlchemy 2 Async
 - asyncpg
 - Alembic
+- SQLGlot (SQL validation)
 
 ### Data & Infrastructure
 
@@ -142,7 +142,7 @@ UNIQUE (tenant_id, email)
 - Azure OpenAI (embeddings + chat)
 - FastEmbed BM25 (sparse)
 - CrossEncoder reranker
-- LangGraph (router-based orchestration)
+- LangGraph (router + HITL interrupt / resume)
 - MCP (stdio tool server under `/mcp`)
 
 ### Quality
@@ -292,11 +292,13 @@ RAG accepts `retrieval_mode`:
 
 ```text
 POST /api/v1/tenants/{tenant_id}/agent
+POST /api/v1/tenants/{tenant_id}/agent/{thread_id}/approval
 ```
 
-Router-based LangGraph orchestration with `knowledge`, `tool`, and
-`unsupported` routes. Supports the same `retrieval_mode` values as RAG.
-Returns `{ route, answer }`. Graph execution failures map to HTTP 503.
+Router-based LangGraph orchestration with `knowledge`, `sql`, `tool`, and
+`unsupported` routes. Agent responses include `thread_id` and `status`
+(`completed` | `approval_required`). Write actions pause for human approval;
+resume with `{ "approved": true|false }`. Graph execution failures map to HTTP 503.
 
 ## Testing
 
@@ -312,7 +314,7 @@ Run:
 cd backend && uv run pytest -q
 ```
 
-18 tests currently pass.
+21 tests currently pass.
 
 ### Retrieval evaluation
 
@@ -352,12 +354,15 @@ dependency install → Ruff lint → Ruff format check → pytest
 - **Sprint 2** — Advanced retrieval & evaluation
 - **Sprint 3** — LangGraph agent orchestration (router graph)
 - **Sprint 4** — MCP & enterprise tool integration
+- **Sprint 5** — SQL agent, SQL security & human-in-the-loop
 
 ### Planned
 
-- **Sprint 5** — SQL agent, security & human-in-the-loop
 - **Sprint 6** — Observability & broader evaluation gates
 - **Sprint 7–10** — Frontend, Azure deployment, multimodal demo, portfolio polish
+
+Production deployment, persistent checkpoint storage, JWT/RBAC, and Langfuse
+are not complete.
 
 ## Design Principles
 
@@ -365,7 +370,7 @@ dependency install → Ruff lint → Ruff format check → pytest
 - Async I/O and database migrations
 - Testability and CI enforcement
 - Measurable retrieval quality
-- Secure tool execution and human approval for sensitive actions (planned)
+- Secure SQL execution and human approval for sensitive write actions
 - Reproducible local development
 
 ## License

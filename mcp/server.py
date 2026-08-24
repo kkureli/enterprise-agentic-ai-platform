@@ -1,6 +1,5 @@
-from pydantic import BaseModel
-
 from mcp.server import MCPServer
+from pydantic import BaseModel
 
 
 class AssetStatus(BaseModel):
@@ -23,7 +22,7 @@ class MaintenanceHistory(BaseModel):
 
 class MaintenanceTicket(BaseModel):
     ticket_id: str
-    asset_id: str
+    asset_code: str
     issue: str
     priority: str
     status: str
@@ -34,18 +33,19 @@ mcp = MCPServer("Enterprise Maintenance Tools")
 
 @mcp.tool()
 def create_maintenance_ticket(
-    asset_id: str,
+    asset_code: str,
     issue: str,
     priority: str,
 ) -> MaintenanceTicket:
-    """Create a maintenance ticket for an enterprise asset."""
+    """
+    Request creation of a maintenance ticket.
 
-    return MaintenanceTicket(
-        ticket_id="MT-1001",
-        asset_id=asset_id,
-        issue=issue,
-        priority=priority,
-        status="created",
+    This write action must be approved and executed by the host
+    application through the HITL workflow.
+    """
+
+    raise RuntimeError(
+        "This write action must be executed through the approved HITL workflow."
     )
 
 

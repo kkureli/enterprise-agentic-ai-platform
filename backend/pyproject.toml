@@ -27,6 +27,7 @@ dependencies = [
     "redis>=8.1.0",
     "sentence-transformers>=6.0.0",
     "sqlalchemy>=2.0.52",
+    "sqlglot>=30.17.0",
     "uvicorn[standard]>=0.52.4",
 ]
 
