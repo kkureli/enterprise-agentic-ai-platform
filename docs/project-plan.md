@@ -4,7 +4,7 @@ This document tracks the implementation roadmap for the **Enterprise Agentic AI 
 
 The project is intentionally built in incremental sprints. A capability is only marked as complete after it is implemented and verified locally.
 
-**Current progress:** Sprint 0 ✅ · Sprint 1 ✅ · Sprint 2 ✅ · Sprint 3 ✅ · Sprint 4 ✅ · Sprint 5 ✅ · Sprint 6+ ⬜ planned
+**Current progress:** Sprint 0 ✅ · Sprint 1 ✅ · Sprint 2 ✅ · Sprint 3 ✅ · Sprint 4 ✅ · Sprint 5 ✅ · Sprint 6 ✅ · Sprint 7+ ⬜ planned
 
 ## Status Legend
 
@@ -430,7 +430,8 @@ Remaining regression-gate automation (CI-enforced retrieval checks) is deferred 
 
 This sprint delivers a **router-based LangGraph orchestration graph**, not a full
 multi-agent supervisor architecture. MCP tools were added in Sprint 4. SQL Agent,
-HITL, conversation memory, and Langfuse remain planned for later sprints.
+HITL and conversation memory remain planned for later sprints. Langfuse tracing
+was added in Sprint 6.
 
 ## 3.1 Graph & Shared State
 
@@ -500,7 +501,7 @@ API returns route + answer, with 422/503 guards
 
 **Not in Sprint 3 (delivered later or still planned):** MCP Agent (Sprint 4),
 SQL Agent, HITL approvals, supervisor orchestration, conversation memory,
-retries/persistence, or Langfuse tracing.
+retries/persistence, or Langfuse tracing (Sprint 6).
 
 ---
 
@@ -600,7 +601,7 @@ Agent API returns route + answer for tool requests; tests remain green
 
 **Not in Sprint 4 (delivered in Sprint 5 or still planned):** real write
 persistence + HITL, SQL agent & SQLGlot security, JWT/RBAC, production
-checkpoint storage, cloud deployment, or Langfuse.
+checkpoint storage, cloud deployment (Langfuse delivered in Sprint 6).
 
 ---
 
@@ -746,31 +747,113 @@ Approved create_maintenance_ticket persists to PostgreSQL
 InMemorySaver documented as dev-only (not production-ready)
 ```
 
-**Not in Sprint 5 (still planned):** JWT authentication, RBAC, Redis/Postgres
-persistent checkpointer for production, cloud deployment, Langfuse / full
-observability, React approval UI, or real external enterprise APIs beyond the
-local PostgreSQL + MCP demo.
+**Not in Sprint 5 (delivered in Sprint 6 or still planned):** Langfuse observability
+(Sprint 6), JWT authentication, RBAC, Redis/Postgres persistent checkpointer for
+production, cloud deployment, React approval UI, or real external enterprise APIs
+beyond the local PostgreSQL + MCP demo.
 
 ---
 
 # Sprint 6 — Evaluation, Reliability & Observability
 
-**Goal:** Make the AI system measurable and debuggable in production-like conditions.
+**Status: ✅ Completed**
 
-- ⬜ Langfuse integration
-- ⬜ OpenTelemetry
-- ⬜ LLM tracing
-- ⬜ Retrieval tracing
-- ⬜ Tool-call tracing
-- ⬜ Latency metrics
-- ⬜ Token usage
-- ⬜ Cost tracking
-- ⬜ Agent success/failure metrics
-- ⬜ RAG answer evaluation
-- ⬜ Golden datasets
-- ⬜ Regression gates
-- ⬜ Model comparison
-- ⬜ Prompt/version tracking
+**Goal:** Make the agent system measurable and debuggable with Langfuse tracing
+and a reproducible agent evaluation suite. Production deployment, OpenTelemetry,
+and CI-enforced regression gates remain planned.
+
+## 6.1 Langfuse Integration
+
+- ✅ LangGraph tracing via `langfuse.langchain.CallbackHandler` on agent API runs
+- ✅ Nested LLM tracing (router, RAG, SQL generation, SQL answer, MCP tool selection, final answer)
+- ✅ Approval resume runs traced separately (`enterprise-agent-approval`)
+- ✅ Evaluation runs traced with Langfuse callbacks and `get_client().flush()`
+
+Trace metadata attached to runs:
+
+- `tenant_id`
+- `thread_id`
+- `retrieval_mode` (initial agent request)
+- `approval` (approve / reject decision on resume)
+
+Langfuse automatically captures per-span **latency**, **token usage**, **model**,
+and **cost** for nested LLM calls.
+
+## 6.2 Failure Visibility
+
+Failures across agent paths are visible in Langfuse traces, including:
+
+- SQL guardrail rejections (`UnsafeSQLQueryError` from SQLGlot validation)
+- LLM / graph execution errors
+- MCP / tool execution failures
+- HITL interrupt and approval resume flows
+
+This supports debugging route selection, SQL validation, tool execution, and
+approval workflows without relying only on API error responses.
+
+## 6.3 Agent Golden Dataset
+
+- ✅ 24-case golden dataset: `evals/agent/golden_dataset.json`
+- ✅ Coverage:
+  - 6 knowledge (RAG)
+  - 6 SQL (structured PostgreSQL queries)
+  - 6 MCP/tool (2 read tools + 4 HITL write actions)
+  - 6 unsupported
+
+Each case specifies `expected_route` and `expected_approval`.
+
+## 6.4 Evaluation Runners
+
+- ✅ Router-only evaluation: `evals/agent/run_router_evaluation.py`
+  - measures route classification accuracy against the golden set
+- ✅ End-to-end agent evaluation: `evals/agent/run_agent_evaluation.py`
+  - invokes the full compiled LangGraph graph per case
+  - checks route, approval interrupt behavior, and answer presence
+  - persists results to `evals/results/agent_evaluation.json`
+  - emits Langfuse traces per case
+
+## 6.5 Current Benchmark (regression artifact)
+
+From the latest local run on the 24-case golden dataset:
+
+| Metric | Result |
+|--------|--------|
+| Route accuracy | 24/24 (100%) |
+| Approval accuracy | 24/24 (100%) |
+| Execution success | 24/24 (100%) |
+| End-to-end pass rate | 24/24 (100%) |
+
+> **Important:** These are **regression results on a small 24-case golden dataset**.
+> They demonstrate local reproducibility and route/approval correctness — they are
+> **not** production-wide accuracy or reliability claims.
+
+## 6.6 Checkpointer Status
+
+- ✅ LangGraph still uses **`InMemorySaver`** for development checkpoints
+- ⬜ Persistent checkpoint storage for production (Postgres / Redis) remains planned
+
+## Sprint 6 Definition of Done
+
+Sprint 6 is complete when:
+
+```text
+Langfuse traces LangGraph runs and nested LLM calls
+        ↓
+Trace metadata includes tenant_id, thread_id, retrieval_mode, approval
+        ↓
+24-case agent golden dataset exists (knowledge / sql / tool / unsupported)
+        ↓
+Router and end-to-end agent evaluation runners produce persisted results
+        ↓
+Failures across SQL, LLM, MCP, and HITL paths are visible in Langfuse
+        ↓
+InMemorySaver remains documented as dev-only
+```
+
+**Not in Sprint 6 (still planned):** OpenTelemetry, CI-enforced regression
+gates, model comparison, prompt/version tracking, RAG answer evaluation beyond
+retrieval metrics, persistent production checkpointer, JWT/RBAC, cloud
+deployment, or React approval UI.
 
 ---
 
@@ -843,6 +926,7 @@ Tasks:
 - ⬜ Demo video
 - ⬜ Performance evidence
 - ✅ Retrieval evaluation results
+- ✅ Agent evaluation results (`evals/results/agent_evaluation.json`)
 - ⬜ Cost/latency measurements
 - ⬜ Security design summary
 - ⬜ Deployment architecture
@@ -870,10 +954,11 @@ Tasks:
 
 # Overall Target Architecture
 
-The diagram below is the long-term target. Sprints 3–5 implement a router-based
+The diagram below is the long-term target. Sprints 3–6 implement a router-based
 LangGraph path (`knowledge` → RAG, `sql` → PostgreSQL, `tool` → MCP with HITL
-for writes, `unsupported` → fallback). Persistent production checkpoints,
-JWT/RBAC, cloud deployment, and full observability remain planned.
+for writes, `unsupported` → fallback) with Langfuse tracing and agent evaluation.
+Persistent production checkpoints, JWT/RBAC, OpenTelemetry, and cloud deployment
+remain planned.
 
 ```text
                          User

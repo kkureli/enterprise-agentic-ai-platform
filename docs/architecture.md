@@ -1,15 +1,14 @@
 # Architecture
 
-## Current Architecture — Sprint 0–5
+## Current Architecture — Sprint 0–6
 
 The platform currently provides a multi-tenant FastAPI backend with document
 ingestion, hybrid retrieval, reranking, multi-query RAG modes, retrieval
 evaluation, a **router-based LangGraph agent** with knowledge (RAG), SQL, and
-MCP tool routes, plus **HITL approval** for write actions that persist
-maintenance tickets to PostgreSQL.
-
-JWT/RBAC, persistent production checkpoint storage, cloud deployment, and
-Langfuse remain planned — production deployment is **not** complete.
+MCP tool routes, **HITL approval** for write actions, and **Langfuse tracing**
+with agent evaluation. JWT/RBAC, persistent production checkpoint storage, cloud
+deployment, and OpenTelemetry remain planned — production deployment is **not**
+complete.
 
 ```mermaid
 flowchart TD
@@ -56,6 +55,8 @@ flowchart TD
     RagReuse --> Mode
     MCPToolNode --> MCPClient[Backend MCP Client]
     MCPClient -->|stdio| MCPServer[MCP Server /mcp]
+    AgentAPI --> Langfuse[Langfuse Tracing]
+    Graph --> Langfuse
 
     Hybrid --> Qdrant
     HybridRerank --> Qdrant
@@ -238,6 +239,87 @@ This is **not** production-ready: process restarts lose paused approval threads.
 Replace with persistent checkpoint storage (e.g. Postgres or Redis-backed
 checkpointer) before production deployment.
 
+## Observability (Sprint 6)
+
+### Langfuse integration
+
+Agent API runs and evaluation invocations attach a Langfuse
+`CallbackHandler` to the LangGraph config. This traces:
+
+- The top-level LangGraph run (`enterprise-agent`, `enterprise-agent-approval`, `agent-evaluation`)
+- Nested LLM spans inside router, RAG, SQL generation, SQL answer synthesis, and MCP tool nodes
+
+Trace metadata includes:
+
+| Field | When attached |
+|-------|----------------|
+| `tenant_id` | Agent request and approval resume |
+| `thread_id` | Agent request and approval resume |
+| `retrieval_mode` | Initial agent request |
+| `approval` | Approval resume (`true` / `false`) |
+
+Langfuse automatically records **latency**, **token usage**, **model**, and
+**cost** for nested LLM calls — no manual instrumentation per span.
+
+Configuration via environment variables (`LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`,
+`LANGFUSE_BASE_URL`) — see `backend/.env.example`.
+
+### Failure visibility
+
+Langfuse traces make failures inspectable across agent paths:
+
+- **SQL guardrail failures** — SQLGlot validation rejects unsafe queries before execution
+- **LLM errors** — model invocation or structured-output failures inside graph nodes
+- **MCP / tool failures** — read-tool execution errors from the MCP client
+- **HITL flows** — interrupt pauses and approval resume spans show write-action lifecycle
+
+API consumers may only see HTTP 503 for graph failures; Langfuse provides the
+nested span context for debugging.
+
+## Agent Evaluation (Sprint 6)
+
+### Golden dataset
+
+`evals/agent/golden_dataset.json` — **24 cases**:
+
+| Category | Cases | Checks |
+|----------|-------|--------|
+| knowledge | 6 | RAG route, no approval |
+| sql | 6 | SQL route, no approval |
+| tool (read) | 2 | MCP route, no approval |
+| tool (write / HITL) | 4 | MCP route, approval interrupt |
+| unsupported | 6 | Fallback route, no approval |
+
+### Evaluation runners
+
+```text
+evals/agent/golden_dataset.json
+        ↓
+evals/agent/run_router_evaluation.py     → router accuracy (stdout)
+        ↓
+evals/agent/run_agent_evaluation.py      → full graph + Langfuse traces
+        ↓
+evals/results/agent_evaluation.json      → persisted metrics + per-case results
+```
+
+End-to-end evaluation checks:
+
+- `expected_route` vs actual route
+- `expected_approval` vs actual interrupt
+- answer present (non-empty)
+
+### Current benchmark (regression artifact)
+
+| Metric | Result |
+|--------|--------|
+| Route accuracy | 24/24 |
+| Approval accuracy | 24/24 |
+| Execution success | 24/24 |
+| End-to-end pass rate | 24/24 |
+
+These results are from a **small 24-case golden dataset** used for local
+regression — they are **not** production-wide accuracy or reliability claims.
+
 ## SQL Agent (Sprint 5)
 
 ### Natural language → SQL pipeline
@@ -363,9 +445,10 @@ LLM final answer → tool_answer → Finalize
 - JWT / RBAC / authenticated tenant context
 - Persistent production checkpointer (current: `InMemorySaver`)
 - Cloud / Azure production deployment
+- OpenTelemetry (Langfuse is implemented; OTel remains planned)
+- CI-enforced evaluation regression gates
 - Real external enterprise APIs beyond local PostgreSQL + MCP demo
 - Multi-agent supervisor orchestration
-- Langfuse / full observability traces
 - Automatic retry policies
 - React approval UI
 
@@ -556,8 +639,19 @@ evals/retrieval/run_evaluation.py
 evals/results/retrieval_results.json
 ```
 
-The golden set is intentionally small and is a reproducible Sprint 2 artifact,
-not a large-scale production benchmark.
+Agent evaluation (Sprint 6):
+
+```text
+evals/agent/golden_dataset.json
+        ↓
+evals/agent/run_router_evaluation.py
+evals/agent/run_agent_evaluation.py
+        ↓
+evals/results/agent_evaluation.json
+```
+
+The retrieval golden set (15 queries) and agent golden set (24 cases) are
+intentionally small regression artifacts — not large-scale production benchmarks.
 
 Critical agent API tests cover graph result mapping (including approval-required
 tool paths), invalid `retrieval_mode` validation (422), and controlled graph
@@ -589,6 +683,7 @@ flowchart LR
 - LangGraph (router + interrupt / Command resume)
 - MCP Python SDK (stdio client + separate `/mcp` server)
 - SQLGlot
+- Langfuse (LangGraph + nested LLM tracing)
 
 ### Persistence & Retrieval
 
@@ -607,6 +702,7 @@ flowchart LR
 - Azure OpenAI
 - Local MCP server under `/mcp` (stdio)
 - LangGraph `InMemorySaver` (dev checkpoints only)
+- Langfuse (local / cloud tracing)
 
 ### Quality
 
@@ -616,13 +712,15 @@ flowchart LR
 - Ruff
 - GitHub Actions
 - Retrieval evaluation under `evals/`
+- Agent evaluation under `evals/agent/`
 
 ## Planned Target Architecture
 
-The following remains the longer-term direction. Sprints 3–5 deliver the
-router-based LangGraph entrypoint with RAG, SQL, MCP tools, and HITL writes to
-local PostgreSQL. Persistent production checkpoints, JWT/RBAC, cloud deployment,
-and observability expansion are **not** current implementation:
+The following remains the longer-term direction. Sprints 3–6 deliver the
+router-based LangGraph entrypoint with RAG, SQL, MCP tools, HITL writes to
+local PostgreSQL, Langfuse tracing, and agent evaluation. Persistent production
+checkpoints, JWT/RBAC, OpenTelemetry, cloud deployment, and CI regression gates
+are **not** current implementation:
 
 ```mermaid
 flowchart TD
@@ -668,5 +766,5 @@ The project is designed around:
 - Controlled SQL execution (SQLGlot + read-only transactions)
 - Controlled tool execution via MCP with host-gated writes
 - Human approval for sensitive actions
-- Observability (planned expansion)
+- Langfuse observability for agent debugging
 - Reproducible local environments

@@ -25,6 +25,12 @@ Rules:
 - Select the tool that best matches the user's request.
 - Use tool results as the source of truth.
 - After receiving the tool result, answer clearly and concisely.
+- If the user asks to create, open, or request a maintenance ticket,
+  always select create_maintenance_ticket.
+- A ticket creation request must never be answered without selecting
+  create_maintenance_ticket.
+- If the user asks for the current status of a specific asset,
+  select get_asset_status.
 """.strip()
 
 

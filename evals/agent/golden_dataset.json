@@ -1,0 +1,149 @@
+[
+  {
+    "id": "knowledge_01",
+    "question": "What does error code AX-4317 mean?",
+    "expected_route": "knowledge",
+    "expected_approval": false
+  },
+  {
+    "id": "knowledge_02",
+    "question": "What procedure should be followed for AX-4317?",
+    "expected_route": "knowledge",
+    "expected_approval": false
+  },
+  {
+    "id": "knowledge_03",
+    "question": "What does the maintenance policy say about emergency repairs?",
+    "expected_route": "knowledge",
+    "expected_approval": false
+  },
+  {
+    "id": "knowledge_04",
+    "question": "Explain the network password policy.",
+    "expected_route": "knowledge",
+    "expected_approval": false
+  },
+  {
+    "id": "knowledge_05",
+    "question": "According to the maintenance documentation, how should hydraulic pressure loss be handled?",
+    "expected_route": "knowledge",
+    "expected_approval": false
+  },
+  {
+    "id": "knowledge_06",
+    "question": "What are the documented troubleshooting steps for equipment pressure errors?",
+    "expected_route": "knowledge",
+    "expected_approval": false
+  },
+
+  {
+    "id": "sql_01",
+    "question": "How many maintenance records does MACHINE-42 have?",
+    "expected_route": "sql",
+    "expected_approval": false
+  },
+  {
+    "id": "sql_02",
+    "question": "Show the maintenance history for MACHINE-42.",
+    "expected_route": "sql",
+    "expected_approval": false
+  },
+  {
+    "id": "sql_03",
+    "question": "Which assets are currently in warning state?",
+    "expected_route": "sql",
+    "expected_approval": false
+  },
+  {
+    "id": "sql_04",
+    "question": "How many open high-priority maintenance tickets are there?",
+    "expected_route": "sql",
+    "expected_approval": false
+  },
+  {
+    "id": "sql_05",
+    "question": "List all open maintenance tickets for MACHINE-42.",
+    "expected_route": "sql",
+    "expected_approval": false
+  },
+  {
+    "id": "sql_06",
+    "question": "Which assets have had corrective maintenance?",
+    "expected_route": "sql",
+    "expected_approval": false
+  },
+
+  {
+    "id": "tool_01",
+    "question": "Get the current operational status of MACHINE-42.",
+    "expected_route": "tool",
+    "expected_approval": false
+  },
+  {
+    "id": "tool_02",
+    "question": "Check the current status of MACHINE-17.",
+    "expected_route": "tool",
+    "expected_approval": false
+  },
+  {
+    "id": "tool_03",
+    "question": "Create a high-priority maintenance ticket for MACHINE-42 because of hydraulic pressure loss.",
+    "expected_route": "tool",
+    "expected_approval": true
+  },
+  {
+    "id": "tool_04",
+    "question": "Open a low-priority maintenance ticket for MACHINE-17 for routine lubrication.",
+    "expected_route": "tool",
+    "expected_approval": true
+  },
+  {
+    "id": "tool_05",
+    "question": "Create a maintenance ticket for ROBOT-07 because the welding arm requires calibration.",
+    "expected_route": "tool",
+    "expected_approval": true
+  },
+  {
+    "id": "tool_06",
+    "question": "Use the enterprise system to create a ticket for MACHINE-42.",
+    "expected_route": "tool",
+    "expected_approval": true
+  },
+
+  {
+    "id": "unsupported_01",
+    "question": "What is the weather in Istanbul?",
+    "expected_route": "unsupported",
+    "expected_approval": false
+  },
+  {
+    "id": "unsupported_02",
+    "question": "Book me a flight to London.",
+    "expected_route": "unsupported",
+    "expected_approval": false
+  },
+  {
+    "id": "unsupported_03",
+    "question": "What is the current Bitcoin price?",
+    "expected_route": "unsupported",
+    "expected_approval": false
+  },
+  {
+    "id": "unsupported_04",
+    "question": "Send an email to the maintenance manager.",
+    "expected_route": "unsupported",
+    "expected_approval": false
+  },
+  {
+    "id": "unsupported_05",
+    "question": "Tell me who won yesterday's football match.",
+    "expected_route": "unsupported",
+    "expected_approval": false
+  },
+  {
+    "id": "unsupported_06",
+    "question": "Order replacement parts from an external supplier.",
+    "expected_route": "unsupported",
+    "expected_approval": false
+  }
+]

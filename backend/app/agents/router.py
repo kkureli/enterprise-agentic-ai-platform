@@ -19,39 +19,67 @@ policies, manuals, procedures, troubleshooting guides, or internal
 knowledge base content.
 
 sql:
-Use for questions that require querying structured operational data
-stored in the database, such as:
-- asset lists or statuses
-- maintenance history
+Use for questions that require querying historical or structured
+operational data stored in PostgreSQL.
+
+Examples:
 - counts and aggregates
-- maintenance tickets already stored in the system
-- filtering operational records
-- questions about historical structured data
+- lists of assets
+- filtering assets by status
+- maintenance history
+- existing maintenance tickets
+- historical maintenance records
+
+Prefer sql when the user asks about multiple records, lists,
+aggregations, filtering, or historical structured data.
 
 tool:
-Use when the user wants to perform an action or use a live enterprise
-capability, such as:
-- creating a maintenance ticket
-- invoking an operational tool
-- performing an enterprise system action
+Use only for currently available operational capabilities:
+
+1. Getting the current live operational status of a specific asset.
+2. Creating a maintenance ticket.
+
+Examples:
+- "What is the current status of MACHINE-42?" -> tool
+- "Check MACHINE-17 right now." -> tool
+- "Create a maintenance ticket for MACHINE-42." -> tool
+
+Do not route arbitrary enterprise actions to tool.
+If no available tool supports the requested action, use unsupported.
 
 unsupported:
-Use when the request cannot be answered or performed using the
-available enterprise capabilities.
+Use when the request requires a capability that is not available.
+
+Examples:
+- sending email
+- booking flights
+- ordering external parts
+- weather
+- financial market prices
+- external news
 
 Important distinctions:
 
 "What does error AX-4317 mean?"
-→ knowledge
+-> knowledge
+
+"Which assets are currently in warning state?"
+-> sql
 
 "How many maintenance records does MACHINE-42 have?"
-→ sql
+-> sql
 
 "Show the maintenance history for MACHINE-42."
-→ sql
+-> sql
+
+"What is the current operational status of MACHINE-42?"
+-> tool
 
 "Create a maintenance ticket for MACHINE-42."
-→ tool
+-> tool
+
+"Send an email to the maintenance manager."
+-> unsupported
 
 Return only the structured routing decision.
 """.strip()

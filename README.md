@@ -11,7 +11,8 @@ The project is being developed incrementally with a focus on software engineerin
 **Sprint 2 — Advanced Retrieval & Evaluation: completed**  
 **Sprint 3 — LangGraph Agent Orchestration: completed**  
 **Sprint 4 — MCP & Enterprise Tool Integration: completed**  
-**Sprint 5 — SQL Agent, Security & Human-in-the-Loop: completed**
+**Sprint 5 — SQL Agent, Security & Human-in-the-Loop: completed**  
+**Sprint 6 — Evaluation, Reliability & Observability: completed**
 
 Implemented so far:
 
@@ -27,6 +28,8 @@ Implemented so far:
 - Separate MCP server under `/mcp` (stdio); host intercepts write tools for HITL
 - Real maintenance-ticket persistence after human approval (`interrupt` / `Command(resume=...)`)
 - Agent approval API with `thread_id` checkpoints (`InMemorySaver` — development only)
+- Langfuse tracing for LangGraph runs and nested LLM calls (latency, tokens, model, cost)
+- 24-case agent golden dataset with router and end-to-end evaluation
 - Health/readiness endpoints, Ruff, pytest (21 passing), and GitHub Actions CI
 
 Current agent orchestration:
@@ -42,8 +45,7 @@ START → LLM Router
 ```
 
 Checkpoints use `InMemorySaver` for local development and must be replaced with
-persistent storage before production. JWT/RBAC, cloud deployment, and Langfuse
-remain planned.
+persistent storage before production. JWT/RBAC and cloud deployment remain planned.
 
 More detail: [`docs/project-plan.md`](docs/project-plan.md) · [`docs/architecture.md`](docs/architecture.md)
 
@@ -85,6 +87,8 @@ flowchart TD
     LangGraph --> HITL[HITL Approval]
     HITL --> PostgreSQL
     LangGraph --> Azure
+    AgentAPI --> Langfuse[Langfuse Tracing]
+    LangGraph --> Langfuse
 
     HealthAPI --> PostgreSQL
     HealthAPI --> Redis[(Redis)]
@@ -144,6 +148,7 @@ UNIQUE (tenant_id, email)
 - CrossEncoder reranker
 - LangGraph (router + HITL interrupt / resume)
 - MCP (stdio tool server under `/mcp`)
+- Langfuse (LangGraph + LLM tracing)
 
 ### Quality
 
@@ -172,6 +177,7 @@ enterprise-agentic-ai-platform/
 │   └── tests/
 ├── docs/
 ├── evals/
+│   ├── agent/
 │   ├── datasets/
 │   ├── results/
 │   └── retrieval/
@@ -218,6 +224,14 @@ The PostgreSQL URL must use the async SQLAlchemy driver:
 
 ```text
 postgresql+asyncpg://postgres:postgres@localhost:5432/agentic_ai
+```
+
+Optional Langfuse tracing (agent runs and evaluations):
+
+```text
+LANGFUSE_PUBLIC_KEY=...
+LANGFUSE_SECRET_KEY=...
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
 ```
 
 ### 4. Run migrations
@@ -328,6 +342,31 @@ Results are written to `evals/results/retrieval_results.json`.
 The current golden set is intentionally small (15 queries) and should not be
 treated as a large-scale production benchmark.
 
+### Agent evaluation
+
+24-case golden dataset at `evals/agent/golden_dataset.json` covering knowledge,
+SQL, MCP/tool, HITL write actions, and unsupported requests.
+
+Router-only evaluation:
+
+```bash
+cd ~/Desktop/enterprise-agentic-ai-platform &&
+PYTHONPATH=backend uv run --project backend --env-file backend/.env python -m evals.agent.run_router_evaluation
+```
+
+End-to-end agent evaluation (with Langfuse tracing):
+
+```bash
+cd ~/Desktop/enterprise-agentic-ai-platform &&
+PYTHONPATH=backend uv run --project backend --env-file backend/.env python -m evals.agent.run_agent_evaluation
+```
+
+Results are written to `evals/results/agent_evaluation.json`.
+
+Current regression benchmark on this small dataset: **24/24** route accuracy,
+**24/24** approval accuracy, **24/24** execution success, **24/24** end-to-end
+pass rate. These are local regression results — not production-wide accuracy claims.
+
 ## Code Quality
 
 ```bash
@@ -355,21 +394,21 @@ dependency install → Ruff lint → Ruff format check → pytest
 - **Sprint 3** — LangGraph agent orchestration (router graph)
 - **Sprint 4** — MCP & enterprise tool integration
 - **Sprint 5** — SQL agent, SQL security & human-in-the-loop
+- **Sprint 6** — Observability & agent evaluation
 
 ### Planned
 
-- **Sprint 6** — Observability & broader evaluation gates
 - **Sprint 7–10** — Frontend, Azure deployment, multimodal demo, portfolio polish
 
-Production deployment, persistent checkpoint storage, JWT/RBAC, and Langfuse
-are not complete.
+Production deployment, persistent checkpoint storage, and JWT/RBAC are not complete.
 
 ## Design Principles
 
 - Multi-tenancy and explicit tenant boundaries
 - Async I/O and database migrations
 - Testability and CI enforcement
-- Measurable retrieval quality
+- Measurable retrieval and agent quality
+- Langfuse observability for agent debugging
 - Secure SQL execution and human approval for sensitive write actions
 - Reproducible local development
 

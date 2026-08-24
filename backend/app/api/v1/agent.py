@@ -2,6 +2,7 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from langfuse.langchain import CallbackHandler
 from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,11 +42,20 @@ async def run_agent(
         )
 
     thread_id = str(uuid4())
-
+    langfuse_handler = CallbackHandler()
     config = {
         "configurable": {
             "thread_id": thread_id,
-        }
+        },
+        "callbacks": [
+            langfuse_handler,
+        ],
+        "run_name": "enterprise-agent",
+        "metadata": {
+            "thread_id": thread_id,
+            "tenant_id": str(tenant_id),
+            "retrieval_mode": payload.retrieval_mode,
+        },
     }
 
     try:
@@ -92,10 +102,21 @@ async def approve_agent_action(
     thread_id: str,
     payload: AgentApprovalRequest,
 ) -> AgentResponse:
+    langfuse_handler = CallbackHandler()
+
     config = {
         "configurable": {
             "thread_id": thread_id,
-        }
+        },
+        "callbacks": [
+            langfuse_handler,
+        ],
+        "metadata": {
+            "thread_id": thread_id,
+            "tenant_id": str(tenant_id),
+            "approval": payload.approved,
+        },
+        "run_name": "enterprise-agent-approval",
     }
 
     snapshot = await agent_graph.aget_state(

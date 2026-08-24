@@ -53,6 +53,10 @@ Rules:
 - Use PostgreSQL syntax.
 - Do not answer the user's question.
 - Return only the SQL through the structured output.
+- Every table referenced in FROM or JOIN must be explicitly tenant scoped.
+- For joined tables, every table alias must have its own
+  alias.tenant_id = :tenant_id condition in the WHERE clause.
+- Never assume that tenant scope propagates through a JOIN.
 """.strip()
 
 
