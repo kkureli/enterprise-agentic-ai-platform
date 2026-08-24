@@ -6,13 +6,21 @@ The project is being developed incrementally with a focus on software engineerin
 
 ## Current Status
 
-**Sprint 0 — Repository & Architecture Foundation: completed**  
-**Sprint 1 — Enterprise Knowledge Ingestion & RAG v1: completed**  
-**Sprint 2 — Advanced Retrieval & Evaluation: completed**  
-**Sprint 3 — LangGraph Agent Orchestration: completed**  
-**Sprint 4 — MCP & Enterprise Tool Integration: completed**  
-**Sprint 5 — SQL Agent, Security & Human-in-the-Loop: completed**  
-**Sprint 6 — Evaluation, Reliability & Observability: completed**
+**Sprint 0 — Repository & Architecture Foundation: completed**
+
+**Sprint 1 — Enterprise Knowledge Ingestion & RAG v1: completed**
+
+**Sprint 2 — Advanced Retrieval & Evaluation: completed**
+
+**Sprint 3 — LangGraph Agent Orchestration: completed**
+
+**Sprint 4 — MCP & Enterprise Tool Integration: completed**
+
+**Sprint 5 — SQL Agent, Security & Human-in-the-Loop: completed**
+
+**Sprint 6 — Evaluation, Langfuse & Production Observability: completed**
+
+**Sprint 7 — React UI & Production UX: completed**
 
 Implemented so far:
 
@@ -30,6 +38,7 @@ Implemented so far:
 - Agent approval API with `thread_id` checkpoints (`InMemorySaver` — development only)
 - Langfuse tracing for LangGraph runs and nested LLM calls (latency, tokens, model, cost)
 - 24-case agent golden dataset with router and end-to-end evaluation
+- React + TypeScript chat frontend with HITL approval card and route indicators
 - Health/readiness endpoints, Ruff, pytest (21 passing), and GitHub Actions CI
 
 Current agent orchestration:
@@ -246,10 +255,32 @@ uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
 
+### 6. Start the frontend (Sprint 7)
+
+From the repository root:
+
+```bash
+cd frontend
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Configure `frontend/.env`:
+
+```text
+VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
+VITE_TENANT_ID=
+```
+
+If `VITE_TENANT_ID` is empty, enter a local tenant UUID in the UI after creating
+one via `POST /api/v1/tenants`.
+
 Useful URLs:
 
 - API: `http://127.0.0.1:8000`
 - Swagger: `http://127.0.0.1:8000/docs`
+- Chat UI: `http://localhost:5173`
 - Health: `http://127.0.0.1:8000/health`
 - Readiness: `http://127.0.0.1:8000/ready`
 - Qdrant dashboard: `http://localhost:6333/dashboard`
@@ -394,13 +425,20 @@ dependency install → Ruff lint → Ruff format check → pytest
 - **Sprint 3** — LangGraph agent orchestration (router graph)
 - **Sprint 4** — MCP & enterprise tool integration
 - **Sprint 5** — SQL agent, SQL security & human-in-the-loop
-- **Sprint 6** — Observability & agent evaluation
+- **Sprint 6** — Evaluation, Langfuse & production observability
+- **Sprint 7** — React chat UI & production UX
 
 ### Planned
 
-- **Sprint 7–10** — Frontend, Azure deployment, multimodal demo, portfolio polish
+- **Sprint 8–10** — Azure deployment, multimodal demo, portfolio polish
 
-Production deployment, persistent checkpoint storage, and JWT/RBAC are not complete.
+Production deployment, persistent checkpoint storage, JWT/RBAC, and persistent
+chat history are not complete.
+
+### Screenshots
+
+Screenshots of the chat UI are not committed in this repository. Capture locally
+after running `npm run dev` in `frontend/`.
 
 ## Design Principles
 

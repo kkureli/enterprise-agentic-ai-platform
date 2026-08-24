@@ -4,7 +4,7 @@ This document tracks the implementation roadmap for the **Enterprise Agentic AI 
 
 The project is intentionally built in incremental sprints. A capability is only marked as complete after it is implemented and verified locally.
 
-**Current progress:** Sprint 0 ✅ · Sprint 1 ✅ · Sprint 2 ✅ · Sprint 3 ✅ · Sprint 4 ✅ · Sprint 5 ✅ · Sprint 6 ✅ · Sprint 7+ ⬜ planned
+**Current progress:** Sprint 0 ✅ · Sprint 1 ✅ · Sprint 2 ✅ · Sprint 3 ✅ · Sprint 4 ✅ · Sprint 5 ✅ · Sprint 6 ✅ · Sprint 7 ✅ · Sprint 8+ ⬜ planned
 
 ## Status Legend
 
@@ -859,18 +859,63 @@ deployment, or React approval UI.
 
 # Sprint 7 — React UI & Production UX
 
-**Goal:** Provide a usable interface for enterprise knowledge and agent workflows.
+**Status: ✅ Completed**
 
-- ⬜ React frontend
-- ⬜ Tenant-aware application shell
-- ⬜ Document upload UI
-- ⬜ Document status UI
-- ⬜ Chat interface
-- ⬜ Source/citation rendering
-- ⬜ Agent execution status
-- ⬜ Human approval UI
-- ⬜ Retrieval/debug view where useful
-- ⬜ Error/loading states
+**Goal:** Provide a usable React chat interface for the existing FastAPI +
+LangGraph agent backend, including HITL approval UX.
+
+## 7.1 React Frontend
+
+- ✅ React + TypeScript + Vite under `/frontend`
+- ✅ Typed API client for agent and approval endpoints
+- ✅ Centralized API config (`VITE_API_BASE_URL`, `VITE_TENANT_ID`)
+- ✅ Development CORS for `http://localhost:5173` and `http://127.0.0.1:5173`
+
+## 7.2 Enterprise Chat UI
+
+- ✅ Conversation area with user/assistant messages
+- ✅ Composer with send button, loading state, and empty-state example prompts
+- ✅ Route/capability badges (Knowledge / Data / Tool / Unsupported)
+- ✅ Standard / Advanced retrieval mode selector
+- ✅ Collapsible Details panel (route, retrieval mode, thread ID)
+- ✅ Error and loading UX for API/network failures
+
+## 7.3 HITL Approval Card
+
+- ✅ Inline approval card when `status === "approval_required"`
+- ✅ Human-readable fields for `create_maintenance_ticket` (asset, issue, priority)
+- ✅ Approve → `POST .../approval { approved: true }`
+- ✅ Reject → `POST .../approval { approved: false }`
+- ✅ No direct write execution from frontend
+- ✅ No optimistic "ticket created" before approval API succeeds
+
+## 7.4 Known Sprint 7 Limitations
+
+- ⬜ Chat history is **frontend in-memory only** (lost on refresh)
+- ⬜ Agent API does not expose RAG citations/sources — no fake citation UI added
+- ⬜ No JWT/RBAC auth UI
+- ⬜ No document upload UI (deferred)
+- ⬜ No streaming responses
+- ⬜ Screenshots not committed (capture locally for portfolio)
+
+## Sprint 7 Definition of Done
+
+Sprint 7 is complete when:
+
+```text
+React chat UI runs against local FastAPI backend
+        ↓
+User can send questions and see route + answer
+        ↓
+Retrieval mode selector maps to backend retrieval_mode
+        ↓
+Write requests show approval card and approve/reject via backend API
+        ↓
+Frontend build/lint pass; backend regression tests remain green
+```
+
+**Not in Sprint 7 (still planned):** Azure deployment, persistent chat history,
+auth, document management UI, citation surfacing, production CORS policy.
 
 ---
 
@@ -954,11 +999,10 @@ Tasks:
 
 # Overall Target Architecture
 
-The diagram below is the long-term target. Sprints 3–6 implement a router-based
-LangGraph path (`knowledge` → RAG, `sql` → PostgreSQL, `tool` → MCP with HITL
-for writes, `unsupported` → fallback) with Langfuse tracing and agent evaluation.
-Persistent production checkpoints, JWT/RBAC, OpenTelemetry, and cloud deployment
-remain planned.
+The diagram below is the long-term target. Sprints 3–7 implement a router-based
+LangGraph backend with Langfuse tracing, agent evaluation, and a React chat UI.
+Persistent production checkpoints, JWT/RBAC, application-wide OpenTelemetry, and
+cloud deployment remain planned.
 
 ```text
                          User

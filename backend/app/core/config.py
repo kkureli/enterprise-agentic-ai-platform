@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     azure_openai_embedding_deployment: str | None = None
     azure_openai_api_version: str = "2024-02-01"
 
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
 
 @lru_cache
 def get_settings() -> Settings:

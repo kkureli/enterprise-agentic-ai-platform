@@ -1,18 +1,18 @@
 # Architecture
 
-## Current Architecture — Sprint 0–6
+## Current Architecture — Sprint 0–7
 
 The platform currently provides a multi-tenant FastAPI backend with document
 ingestion, hybrid retrieval, reranking, multi-query RAG modes, retrieval
 evaluation, a **router-based LangGraph agent** with knowledge (RAG), SQL, and
-MCP tool routes, **HITL approval** for write actions, and **Langfuse tracing**
-with agent evaluation. JWT/RBAC, persistent production checkpoint storage, cloud
-deployment, and OpenTelemetry remain planned — production deployment is **not**
-complete.
+MCP tool routes, **HITL approval** for write actions, **Langfuse tracing**,
+agent evaluation, and a **React chat frontend**. JWT/RBAC, persistent production
+checkpoint storage, persistent chat history, and cloud deployment remain
+planned — production deployment is **not** complete.
 
 ```mermaid
 flowchart TD
-    Client[API Client / Swagger]
+    Client[API Client / Swagger / React Chat UI]
 
     Client --> FastAPI[FastAPI Application]
 
@@ -315,10 +315,44 @@ End-to-end evaluation checks:
 | Route accuracy | 24/24 |
 | Approval accuracy | 24/24 |
 | Execution success | 24/24 |
-| End-to-end pass rate | 24/24 |
+| Workflow regression pass rate | 24/24 |
 
 These results are from a **small 24-case golden dataset** used for local
-regression — they are **not** production-wide accuracy or reliability claims.
+regression — they are **not** production-wide accuracy, answer-quality, or
+reliability claims.
+
+## React Chat Frontend (Sprint 7)
+
+Location: `/frontend` (React + TypeScript + Vite)
+
+```text
+Browser (localhost:5173)
+  ↓
+React chat UI
+  ↓
+POST /api/v1/tenants/{tenant_id}/agent
+  ↓
+LangGraph backend (unchanged)
+  ↓
+Response → message + route badge + optional approval card
+```
+
+Features:
+
+- In-memory conversation state (lost on refresh)
+- Standard / Advanced retrieval mode selector → `retrieval_mode`
+- Route badges: Knowledge / Data / Tool / Unsupported
+- HITL approval card for write actions (approve/reject via backend API only)
+- Collapsible Details panel (route, retrieval mode, thread ID)
+- Loading and error states
+
+Configuration:
+
+- `frontend/.env.example` — `VITE_API_BASE_URL`, `VITE_TENANT_ID`
+- Backend dev CORS — `CORS_ORIGINS` in `backend/.env.example`
+
+Known limitation: the Agent API does **not** expose RAG citations/sources, so
+the frontend does not render a Sources section.
 
 ## SQL Agent (Sprint 5)
 
@@ -450,7 +484,7 @@ LLM final answer → tool_answer → Finalize
 - Real external enterprise APIs beyond local PostgreSQL + MCP demo
 - Multi-agent supervisor orchestration
 - Automatic retry policies
-- React approval UI
+- React approval UI (inline approval card implemented in Sprint 7 chat UI)
 
 ## Multi-Tenant Data Model
 
@@ -713,14 +747,15 @@ flowchart LR
 - GitHub Actions
 - Retrieval evaluation under `evals/`
 - Agent evaluation under `evals/agent/`
+- React + TypeScript chat UI under `frontend/`
 
 ## Planned Target Architecture
 
-The following remains the longer-term direction. Sprints 3–6 deliver the
+The following remains the longer-term direction. Sprints 3–7 deliver the
 router-based LangGraph entrypoint with RAG, SQL, MCP tools, HITL writes to
-local PostgreSQL, Langfuse tracing, and agent evaluation. Persistent production
-checkpoints, JWT/RBAC, OpenTelemetry, cloud deployment, and CI regression gates
-are **not** current implementation:
+local PostgreSQL, Langfuse tracing, agent evaluation, and a React chat UI.
+Persistent production checkpoints, JWT/RBAC, application-wide OpenTelemetry,
+cloud deployment, and CI regression gates are **not** current implementation:
 
 ```mermaid
 flowchart TD
