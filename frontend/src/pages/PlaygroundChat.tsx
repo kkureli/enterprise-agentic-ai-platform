@@ -54,39 +54,31 @@ export function PlaygroundChat({
       />
 
       <div className="prompt-categories">
-        {categories.map((category) => {
-          const isComposite = category === 'Composite / Synthesis'
-          return (
-            <section
-              key={category}
-              className={
-                isComposite ? 'prompt-category prompt-category--composite' : 'prompt-category'
-              }
-            >
-              <h3 className="prompt-category__title">{category}</h3>
-              {isComposite ? (
-                <p className="prompt-category__caption">RAG + SQL + MCP</p>
-              ) : null}
-              <div className="prompt-category__list">
-                {prompts
-                  .filter((item) => item.category === category)
-                  .map((item) => (
-                    <button
-                      key={`${category}-${item.prompt}`}
-                      type="button"
-                      className="prompt-category__button"
-                      disabled={isSending}
-                      title={item.prompt}
-                      aria-label={item.prompt}
-                      onClick={() => onSelectPrompt(item.prompt)}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-              </div>
-            </section>
-          )
-        })}
+        {categories.map((category) => (
+          <section key={category} className="prompt-category">
+            <h3 className="prompt-category__title">{category}</h3>
+            {category === 'Composite / Synthesis' ? (
+              <p className="prompt-category__caption">RAG + SQL + MCP</p>
+            ) : null}
+            <div className="prompt-category__list">
+              {prompts
+                .filter((item) => item.category === category)
+                .map((item) => (
+                  <button
+                    key={`${category}-${item.prompt}`}
+                    type="button"
+                    className="prompt-category__button"
+                    disabled={isSending}
+                    title={item.prompt}
+                    aria-label={item.prompt}
+                    onClick={() => onSelectPrompt(item.prompt)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+            </div>
+          </section>
+        ))}
       </div>
 
       <div className="chat-panel">
