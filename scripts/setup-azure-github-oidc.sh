@@ -7,6 +7,13 @@
 # - delete resources
 # - run as part of CI
 #
+# GitHub Actions issues an *immutable* OIDC subject that includes numeric
+# owner and repository IDs (not name-only). Entra federated credentials must
+# match that format or token exchange fails with AADSTS700213.
+#
+# Subject shape (resolved dynamically via `gh api`):
+#   repo:<owner>@<OWNER_ID>/<repo>@<REPO_ID>:environment:<env>
+#
 # Prerequisites:
 # - Azure CLI logged in with permission to create an app registration + role assignment
 # - gh CLI authenticated to kkureli/enterprise-agentic-ai-platform
@@ -18,9 +25,6 @@
 #   export AZURE_RESOURCE_GROUP="rg-enterprise-agentic-ai"
 #   export AZURE_CONTAINER_APP="enterprise-agentic-ai-backend"
 #   export AZURE_CONTAINER_APP_URL="https://enterprise-agentic-ai-backend.jollyplant-fb706637.swedencentral.azurecontainerapps.io"
-#   # optional overrides:
-#   # export APP_DISPLAY_NAME="github-aca-backend-cd"
-#   # export AZURE_LOCATION from az account
 #   ./scripts/setup-azure-github-oidc.sh
 
 set -euo pipefail
@@ -32,6 +36,8 @@ AZURE_CONTAINER_APP="${AZURE_CONTAINER_APP:-enterprise-agentic-ai-backend}"
 AZURE_CONTAINER_APP_URL="${AZURE_CONTAINER_APP_URL:-https://enterprise-agentic-ai-backend.jollyplant-fb706637.swedencentral.azurecontainerapps.io}"
 APP_DISPLAY_NAME="${APP_DISPLAY_NAME:-github-aca-backend-cd}"
 FEDERATION_NAME="${FEDERATION_NAME:-github-environment-production}"
+OIDC_ISSUER="https://token.actions.githubusercontent.com"
+OIDC_AUDIENCE="api://AzureADTokenExchange"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -44,18 +50,42 @@ require_cmd az
 require_cmd gh
 require_cmd jq
 
+if [[ "${GITHUB_REPO}" != */* ]]; then
+  echo "GITHUB_REPO must be owner/name, got: ${GITHUB_REPO}" >&2
+  exit 1
+fi
+
+echo "Resolving immutable GitHub owner/repository IDs via gh api…"
+REPO_JSON="$(gh api "repos/${GITHUB_REPO}")"
+OWNER_ID="$(jq -r '.owner.id' <<<"${REPO_JSON}")"
+REPO_ID="$(jq -r '.id' <<<"${REPO_JSON}")"
+OWNER_LOGIN="$(jq -r '.owner.login' <<<"${REPO_JSON}")"
+REPO_NAME_ACTUAL="$(jq -r '.name' <<<"${REPO_JSON}")"
+
+if [[ -z "${OWNER_ID}" || "${OWNER_ID}" == "null" || -z "${REPO_ID}" || "${REPO_ID}" == "null" ]]; then
+  echo "Failed to resolve owner/repo IDs from gh api repos/${GITHUB_REPO}" >&2
+  exit 1
+fi
+
+# Match the subject GitHub Actions actually presents in production tokens.
+SUBJECT="repo:${OWNER_LOGIN}@${OWNER_ID}/${REPO_NAME_ACTUAL}@${REPO_ID}:environment:${GITHUB_ENV_NAME}"
+
 SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
 TENANT_ID="$(az account show --query tenantId -o tsv)"
 APP_SCOPE="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.App/containerApps/${AZURE_CONTAINER_APP}"
-SUBJECT="repo:${GITHUB_REPO}:environment:${GITHUB_ENV_NAME}"
 
 cat <<EOF
 ============================================================
-Intended one-time OIDC setup (review before continuing)
+Intended OIDC setup (review before continuing)
 ============================================================
 GitHub repository : ${GITHUB_REPO}
+  owner login/id  : ${OWNER_LOGIN} / ${OWNER_ID}
+  repo name/id    : ${REPO_NAME_ACTUAL} / ${REPO_ID}
 GitHub environment: ${GITHUB_ENV_NAME}
 OIDC subject      : ${SUBJECT}
+  (immutable ID form — not name-only repo:owner/name:environment:…)
+OIDC issuer       : ${OIDC_ISSUER}
+OIDC audience     : ${OIDC_AUDIENCE}
 Azure tenant      : ${TENANT_ID}
 Azure subscription: ${SUBSCRIPTION_ID}
 Resource group    : ${AZURE_RESOURCE_GROUP}
@@ -96,25 +126,42 @@ if ! az ad sp show --id "${CLIENT_ID}" >/dev/null 2>&1; then
 fi
 SP_OBJECT_ID="$(az ad sp show --id "${CLIENT_ID}" --query id -o tsv)"
 
-echo "Creating federated credential for GitHub Environment subject…"
 CRED_JSON="$(jq -n \
   --arg name "${FEDERATION_NAME}" \
   --arg subject "${SUBJECT}" \
+  --arg issuer "${OIDC_ISSUER}" \
+  --arg audience "${OIDC_AUDIENCE}" \
   '{
     name: $name,
-    issuer: "https://token.actions.githubusercontent.com",
+    issuer: $issuer,
     subject: $subject,
-    audiences: ["api://AzureADTokenExchange"],
-    description: "GitHub Actions Backend CD via environment production"
+    audiences: [$audience],
+    description: "GitHub Actions Backend CD (immutable environment subject)"
   }')"
 
-if az ad app federated-credential list --id "${CLIENT_ID}" --query "[?name=='${FEDERATION_NAME}'].name" -o tsv | grep -q "${FEDERATION_NAME}"; then
-  echo "Federated credential '${FEDERATION_NAME}' already exists — leaving unchanged."
-else
+echo "Ensuring federated credential '${FEDERATION_NAME}' matches immutable subject…"
+EXISTING_SUBJECT="$(az ad app federated-credential list \
+  --id "${CLIENT_ID}" \
+  --query "[?name=='${FEDERATION_NAME}'].subject | [0]" \
+  -o tsv 2>/dev/null || true)"
+
+if [[ -z "${EXISTING_SUBJECT}" || "${EXISTING_SUBJECT}" == "null" ]]; then
   az ad app federated-credential create \
     --id "${CLIENT_ID}" \
     --parameters "${CRED_JSON}" >/dev/null
-  echo "Federated credential created."
+  echo "Federated credential created with subject: ${SUBJECT}"
+elif [[ "${EXISTING_SUBJECT}" == "${SUBJECT}" ]]; then
+  echo "Federated credential already matches immutable subject — no change."
+else
+  echo "Federated credential subject differs:"
+  echo "  current : ${EXISTING_SUBJECT}"
+  echo "  desired : ${SUBJECT}"
+  echo "Updating federated credential in place (no duplicate)…"
+  az ad app federated-credential update \
+    --id "${CLIENT_ID}" \
+    --federated-credential-id "${FEDERATION_NAME}" \
+    --parameters "${CRED_JSON}" >/dev/null
+  echo "Federated credential updated."
 fi
 
 echo "Assigning Container Apps Contributor on the Container App only…"
@@ -154,6 +201,9 @@ gh variable set AZURE_CONTAINER_APP_URL --env "${GITHUB_ENV_NAME}" --repo "${GIT
 cat <<EOF
 
 Done.
+
+OIDC subject in use:
+  ${SUBJECT}
 
 Next steps:
 1. Confirm GHCR access for the Container App still works (already configured in Azure).

@@ -491,8 +491,8 @@ LLM final answer → tool_answer → Finalize
 
 - JWT / RBAC / authenticated public product layer
 - Durable Azure Blob storage for uploaded original files
-- Full backend Container Apps CD go-live (OIDC wired + first successful run);
-  workflow implemented in `.github/workflows/backend-cd.yml`
+- Full backend Container Apps CD (**COMPLETE**: OIDC + first successful
+  production run via `.github/workflows/backend-cd.yml`)
 - OpenTelemetry (Langfuse is implemented; OTel remains planned)
 - CI-enforced evaluation regression gates
 - Real external enterprise APIs beyond local PostgreSQL + MCP demo data
@@ -759,12 +759,12 @@ Local default remains `CHECKPOINT_BACKEND=memory` (`InMemorySaver`).
 Production selects PostgreSQL-backed LangGraph checkpoints without a second
 database. See `docs/phase-8b-runbook.md` for env and operational steps.
 
-**Remaining for Backend CD go-live:** one-time GitHub Environment `production`
-OIDC variables + Azure federated credential
-(`scripts/setup-azure-github-oidc.sh`), then first successful
-`backend-cd.yml` run. Workflow code is in-repo. Frontend Static Web Apps deploy
-already exists. Latest local frontend UX polish must be committed before it is
-live on SWA.
+**Backend Full CD:** COMPLETE — GitHub Environment `production` OIDC uses
+GitHub’s immutable subject
+(`repo:owner@OWNER_ID/repo@REPO_ID:environment:production`). Setup/repair via
+`scripts/setup-azure-github-oidc.sh`. First successful production chain:
+validate → GHCR → OIDC → ACA → `/health` → `/ready`. Latest local frontend UX
+polish must be committed before it is live on SWA.
 
 After Neon `DATABASE_URL` is configured:
 

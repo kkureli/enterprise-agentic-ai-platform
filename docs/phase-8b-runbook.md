@@ -1,15 +1,13 @@
 # Phase 8B — Low-Cost Cloud Deployment Runbook
 
-**Status:** primary hosting and data plane are **provisioned and in use** for the
-public playground (Azure Container Apps, Static Web Apps, Neon, Qdrant Cloud,
-Upstash). This runbook remains the operational reference for env vars, cost
-controls, migrations, and remaining automation gaps.
+**Status:** primary hosting, data plane, and **Backend Full CD** are in use for
+the public playground (Azure Container Apps, Static Web Apps, Neon, Qdrant Cloud,
+Upstash). First successful production Backend CD run completed:
 
-**Still pending:** one-time Azure GitHub OIDC configuration and the first
-successful production Backend CD run. Workflow code for
-`validate → GHCR SHA image → ACA revision → smoke tests` is implemented in
-`.github/workflows/backend-cd.yml`. Until OIDC is configured and a real run
-passes, do not treat backend auto-CD as fully operational.
+`validate → GHCR → Azure OIDC → ACA revision → /health → /ready`.
+
+This runbook remains the operational reference for env vars, cost controls,
+migrations, OIDC subject format, and rollback.
 
 Target fixed monthly infrastructure cost ≈ **$0**.
 
@@ -178,9 +176,8 @@ npm run build
 
 Do **not** assume Azure / Neon / Qdrant / Upstash credentials are absent — the
 public playground stack is already wired. Frontend deploys via Static Web Apps.
-Backend production CD is implemented in GitHub Actions
-(`.github/workflows/backend-cd.yml`) but requires one-time OIDC setup before the
-first successful auto-deploy.
+Backend production CD is live via `.github/workflows/backend-cd.yml`
+(validate → GHCR → OIDC → ACA → smoke tests).
 
 ## Backend CD (GitHub Actions → GHCR → Azure OIDC → ACA)
 
@@ -223,11 +220,45 @@ gh variable set AZURE_CLIENT_ID --env production --body "<appId>"
 
 ### One-time Azure federated identity
 
-Preferred subject (Environment-scoped):
+GitHub Actions presents an **immutable** OIDC `sub` that includes numeric owner
+and repository IDs (not the legacy name-only form).
+
+Observed production subject shape:
+
+```text
+repo:<owner>@<OWNER_ID>/<repo>@<REPO_ID>:environment:production
+```
+
+Example pattern (IDs resolved dynamically — do not hardcode):
+
+```text
+repo:kkureli@<OWNER_ID>/enterprise-agentic-ai-platform@<REPO_ID>:environment:production
+```
+
+Resolve IDs with:
+
+```bash
+gh api repos/kkureli/enterprise-agentic-ai-platform --jq '{owner_id: .owner.id, repo_id: .id}'
+```
+
+Issuer / audience (unchanged):
+
+```text
+issuer:   https://token.actions.githubusercontent.com
+audience: api://AzureADTokenExchange
+```
+
+Legacy name-only subjects such as:
 
 ```text
 repo:kkureli/enterprise-agentic-ai-platform:environment:production
 ```
+
+do **not** match GitHub’s token and fail Entra token exchange with **AADSTS700213**.
+
+`scripts/setup-azure-github-oidc.sh` builds the immutable subject from `gh api`,
+creates or **updates** the federated credential when the subject differs, and
+does not create duplicates on re-run.
 
 Least-privilege role:
 

@@ -56,9 +56,9 @@ flowchart TD
 **Deployment path (not request-time):** GitHub Actions Backend CD validates the
 backend, publishes an immutable image to **GHCR**, authenticates to Azure with
 **OIDC** (no client secret), updates the existing Container Apps revision, then
-smoke-tests `/health` and `/ready`. Status: **workflow implemented; one-time
-OIDC setup + first successful run still required** before calling it fully
-operational. Frontend: GitHub Actions → Vite build → Azure Static Web Apps.
+smoke-tests `/health` and `/ready`. **Backend Full CD is COMPLETE** after a
+successful production run. Frontend: GitHub Actions → Vite build → Azure Static
+Web Apps.
 
 Local development still uses Docker Compose for PostgreSQL, Redis, and Qdrant.
 
@@ -428,9 +428,9 @@ GitHub → Backend CD (validate → Docker build)
   → smoke /health + /ready
 ```
 
-Status: workflow implemented; one-time OIDC configuration + first successful
-production run still required before calling auto-CD fully operational.
-See [`docs/phase-8b-runbook.md`](docs/phase-8b-runbook.md) and
+Status: **Backend Full CD COMPLETE** (validate → GHCR → OIDC → ACA →
+`/health` → `/ready`). OIDC federated credentials must use GitHub’s immutable
+subject form; see [`docs/phase-8b-runbook.md`](docs/phase-8b-runbook.md) and
 `scripts/setup-azure-github-oidc.sh`.
 
 **Frontend**
@@ -453,9 +453,9 @@ Upstash · Azure OpenAI / Foundry · Langfuse.
 | `backend-image.yml` | Ad-hoc GHCR publish only (`workflow_dispatch`) — does not race CD |
 | `azure-static-web-apps-*.yml` | Build/deploy frontend to **Static Web Apps** |
 
-**Important:** Backend CD will update Container Apps only after GitHub
-Environment `production` OIDC variables are configured and a real run
-succeeds. Until then, do not claim every backend `git push` already deploys ACA.
+**Important:** Backend CD updates Container Apps on backend-relevant `master`
+pushes (and `workflow_dispatch`). Entra must trust GitHub’s immutable OIDC
+subject (`repo:owner@OWNER_ID/repo@REPO_ID:environment:production`).
 
 ---
 
@@ -466,18 +466,17 @@ succeeds. Until then, do not claim every backend `git push` already deploys ACA.
 | Sprints 0–7 | Complete |
 | Sprint 8 cloud hosting | Largely complete (ACA, SWA, Neon, Qdrant Cloud, Upstash, Postgres checkpoints, playground) |
 | Backend GHCR publish | Complete (via CD image job / optional manual image workflow) |
-| Backend ACA auto-deploy | **Implemented in repo** — pending OIDC setup + first successful run |
+| Backend ACA auto-deploy | **COMPLETE** |
 | Latest local frontend UX polish | Implemented in working tree; not claimed live until commit + SWA deploy |
 
 Feature scope for the core platform is largely sufficient. Near-term priority
-is finishing backend CD OIDC wiring, docs/demo polish, and evidence — not new
-AI frameworks.
+is docs/demo polish and evidence — backend Full CD is already live.
 
 ---
 
 ## Roadmap
 
-1. Complete Backend CD go-live (one-time Azure/GitHub OIDC + first successful ACA deploy)
+1. Portfolio polish / evidence (Backend Full CD already complete)
 2. Commit/deploy latest playground UX polish + smoke test production
 3. Portfolio evidence (screenshots, short demo video, CV bullets)
 4. Optional: Azure Blob durable document storage

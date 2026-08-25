@@ -164,7 +164,7 @@ tenants, cost controls, and CI/CD.
 
 | Item | Status |
 |------|--------|
-| Backend full CD: GHCR → Azure OIDC → Container Apps revision | **IMPLEMENTED in repo** — pending one-time OIDC config + first successful production run |
+| Backend full CD: GHCR → Azure OIDC → Container Apps revision | **COMPLETE** (first production run: validate → GHCR → OIDC → ACA → /health → /ready) |
 | Commit + SWA deploy of latest local frontend UX polish (cold-start tenant loading states, retrieval-mode education, Architecture RAG Pipeline Explorer) | PENDING (present in local working tree; not claimed live) |
 | Final production smoke test after frontend polish lands | PENDING |
 | README / architecture / runbook accuracy pass | IN PROGRESS |
@@ -176,10 +176,11 @@ tenants, cost controls, and CI/CD.
 - Frontend: push/PR workflows can deploy Static Web Apps
 - Backend CD workflow (`.github/workflows/backend-cd.yml`):
   validate → GHCR `:sha-<git-sha>` → Azure OIDC → ACA image update → smoke tests
-- Backend CD is **not fully operational** until GitHub Environment `production`
-  OIDC variables are configured and one real deploy succeeds
+- Backend Full CD is **COMPLETE** after a successful production run
+- OIDC federated credential must use GitHub’s **immutable** subject
+  (`repo:owner@OWNER_ID/repo@REPO_ID:environment:production`); see
+  `scripts/setup-azure-github-oidc.sh` and `docs/phase-8b-runbook.md`
 - Ad-hoc GHCR publish: `backend-image.yml` (`workflow_dispatch` only)
-- Do not claim every `git push` already updates ACA until that first CD run passes
 
 ## Known Sprint 8 limitations (still true)
 
