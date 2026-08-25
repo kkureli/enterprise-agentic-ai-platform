@@ -108,7 +108,7 @@ Local development still uses Docker Compose for PostgreSQL, Redis, and Qdrant.
 | Tenancy | PostgreSQL `tenant_id` + Qdrant payload filters |
 | Cache / cost | Redis RAG cache, layered rate limits, public-demo budget guards |
 | Checkpoints | PostgreSQL LangGraph checkpoints in production (`CHECKPOINT_BACKEND=postgres`) |
-| Observability | Langfuse + in-app Execution Trace |
+| Observability | Langfuse + in-app Execution Trace; optional Firebase/GA4 site traffic |
 | Evaluation | Agent (33 cases, 9 composite) + retrieval (15 queries, k=3) golden sets |
 
 ---

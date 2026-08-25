@@ -174,6 +174,29 @@ npm run build
 
 `frontend/public/staticwebapp.config.json` provides SPA navigation fallback.
 
+### Firebase Analytics (optional)
+
+Purpose: basic anonymous portfolio traffic measurement (visits, daily/monthly
+traffic, approximate geo, standard GA4 active-user metrics).
+
+The playground intentionally does **not** track AI prompts, responses, SQL,
+documents, execution traces, tenant IDs, or other application content. Only
+standard Firebase / GA4 website telemetry is enabled, and only in production
+builds (`import.meta.env.PROD`) when all `VITE_FIREBASE_*` values are present.
+
+Set these GitHub Actions repository/environment **variables** (same style as
+`VITE_API_BASE_URL`) so the SWA workflow can embed them at build time:
+
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
+- `VITE_FIREBASE_MEASUREMENT_ID`
+
+Missing values skip Analytics initialization; the UI still loads normally.
+
 Do **not** assume Azure / Neon / Qdrant / Upstash credentials are absent — the
 public playground stack is already wired. Frontend deploys via Static Web Apps.
 Backend production CD is live via `.github/workflows/backend-cd.yml`

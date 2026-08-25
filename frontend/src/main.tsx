@@ -9,3 +9,10 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+// Production-only, non-blocking Firebase / GA4 website analytics.
+void import('./lib/firebase')
+  .then((module) => module.initFirebaseAnalytics())
+  .catch(() => {
+    // Ignore analytics bootstrap failures.
+  })
