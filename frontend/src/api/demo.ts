@@ -17,6 +17,13 @@ export type DemoEvaluations = {
     approval_accuracy: number
     execution_success_rate: number
     end_to_end_pass_rate: number
+    required_capability_recall?: number | null
+    exact_capability_set_accuracy?: number | null
+    unnecessary_capability_rate?: number | null
+    per_capability_execution_success?: number | null
+    synthesis_required_fact_coverage?: number | null
+    tenant_correctness?: number | null
+    composite_cases?: number | null
   }
   retrieval: {
     num_queries: number

@@ -31,6 +31,7 @@ async def main():
                 "get_asset_status",
                 arguments={
                     "asset_id": "MACHINE-42",
+                    "tenant_slug": "atlas-manufacturing",
                 },
             )
 

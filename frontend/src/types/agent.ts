@@ -22,6 +22,7 @@ export type RetrievalChunkDetail = {
 
 export type ExecutionDetails = {
   route?: string | null
+  selected_capabilities?: string[]
   graph_path?: string[]
   retrieval?: {
     retrieval_mode?: string | null
@@ -57,6 +58,7 @@ export type ExecutionDetails = {
     requires_approval?: boolean | null
     approval_status?: string | null
     action_result?: Record<string, unknown> | null
+    tenant_slug?: string | null
   } | null
   hitl?: {
     required?: boolean | null
@@ -84,12 +86,15 @@ export type ExecutionDetails = {
   timing?: {
     total_ms?: number | null
     router_ms?: number | null
+    planner_ms?: number | null
     retrieval_ms?: number | null
     reranking_ms?: number | null
     sql_generation_ms?: number | null
     sql_execution_ms?: number | null
     tool_execution_ms?: number | null
     llm_generation_ms?: number | null
+    synthesis_ms?: number | null
+    write_gate_ms?: number | null
   } | null
   observability_id?: string | null
 }
@@ -98,6 +103,8 @@ export type AgentResponse = {
   thread_id: string
   status: AgentStatus
   route: AgentRoute
+  planned_routes?: AgentRoute[] | null
+  requires_synthesis?: boolean | null
   answer: string
   pending_action: PendingAction | null
   execution_details?: ExecutionDetails | null

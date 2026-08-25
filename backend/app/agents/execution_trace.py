@@ -44,6 +44,30 @@ def merge_execution_details(
     if left_timing or right_timing:
         merged["timing"] = {**left_timing, **right_timing}
 
+    # Preserve multi-capability provenance: do not drop earlier sections when a
+    # later node omits them (dict spread already keeps left-only keys).
+    for key in ("retrieval", "sources", "sql", "tools", "hitl", "cache"):
+        if key in left and key not in right:
+            merged[key] = left[key]
+        elif key in left and right.get(key) is None and left.get(key) is not None:
+            merged[key] = left[key]
+
+    left_caps = list(left.get("selected_capabilities") or [])
+    right_caps = list(right.get("selected_capabilities") or [])
+    if left_caps or right_caps:
+        seen: set[str] = set()
+        caps: list[str] = []
+        for item in left_caps + right_caps:
+            if item in seen:
+                continue
+            seen.add(item)
+            caps.append(item)
+        merged["selected_capabilities"] = caps
+
+    # Keep planner primary route when multiple capabilities were selected.
+    if len(merged.get("selected_capabilities") or []) > 1 and left.get("route"):
+        merged["route"] = left["route"]
+
     return merged
 
 
@@ -171,6 +195,7 @@ def build_execution_details(
 
     return ExecutionDetails(
         route=route or data.get("route"),
+        selected_capabilities=list(data.get("selected_capabilities") or []),
         graph_path=list(data.get("graph_path") or []),
         retrieval=retrieval,
         sources=sources,

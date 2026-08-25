@@ -1,11 +1,18 @@
 {
   "disclaimer": "Metrics are from a curated regression dataset and are not claims of universal production accuracy.",
   "agent": {
-    "total_cases": 24,
+    "total_cases": 33,
     "route_accuracy": 1.0,
     "approval_accuracy": 1.0,
     "execution_success_rate": 1.0,
     "end_to_end_pass_rate": 1.0,
+    "required_capability_recall": 1.0,
+    "exact_capability_set_accuracy": 1.0,
+    "unnecessary_capability_rate": 0.0,
+    "per_capability_execution_success": 1.0,
+    "synthesis_required_fact_coverage": 1.0,
+    "tenant_correctness": 1.0,
+    "composite_cases": 9,
     "source": "evals/results/agent_evaluation.json"
   },
   "retrieval": {

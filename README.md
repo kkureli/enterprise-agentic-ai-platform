@@ -38,7 +38,7 @@ codes). Answers are live RAG results, not hardcoded UI strings.
 - Multi-tenant knowledge RAG with Execution Trace (route, retrieval, sources,
   latency, tokens, estimated cost)
 - Standard vs Advanced Compare Runs
-- SQL + MCP tool routes and human-in-the-loop write approval
+- SQL + MCP tool routes, composite RAG+SQL+MCP synthesis, and human-in-the-loop write approval
 - Evaluation / regression metrics and RAG Pipeline Explorer
 
 Full ~75s walkthrough:
@@ -53,7 +53,7 @@ Full ~75s walkthrough:
 The platform demonstrates:
 
 - Multi-tenant knowledge RAG with dense + sparse hybrid retrieval and reranking
-- LangGraph agent routing across knowledge, SQL, MCP tools, and unsupported paths
+- Selective LangGraph multi-capability orchestration across knowledge, SQL, and MCP
 - Human-in-the-loop approval for sensitive write actions
 - Evaluation/regression metrics and Langfuse observability
 - A React playground for exploring tenant isolation, Compare Runs, and Execution Trace
@@ -101,7 +101,7 @@ Local development still uses Docker Compose for PostgreSQL, Redis, and Qdrant.
 | Area | Capability |
 |------|------------|
 | RAG | Dense + sparse hybrid retrieval, weighted RRF, cross-encoder reranking, Standard / Advanced modes |
-| Agents | LangGraph router → knowledge / SQL / MCP tool / unsupported |
+| Agents | Selective planner → one or more capabilities (RAG / SQL / MCP); composite fan-out + grounded synthesis |
 | SQL | LLM SQL + SQLGlot validation, SELECT-only, allowed tables, tenant bind param, read-only execution |
 | MCP | `get_asset_status`, `get_maintenance_history`, `create_maintenance_ticket` |
 | HITL | Write tools pause for human approval; approved actions persist tickets |
@@ -109,7 +109,7 @@ Local development still uses Docker Compose for PostgreSQL, Redis, and Qdrant.
 | Cache / cost | Redis RAG cache, layered rate limits, public-demo budget guards |
 | Checkpoints | PostgreSQL LangGraph checkpoints in production (`CHECKPOINT_BACKEND=postgres`) |
 | Observability | Langfuse + in-app Execution Trace |
-| Evaluation | Agent (24 cases) + retrieval (15 queries, k=3) golden sets |
+| Evaluation | Agent (33 cases, 9 composite) + retrieval (15 queries, k=3) golden sets |
 
 ---
 
@@ -117,13 +117,13 @@ Local development still uses Docker Compose for PostgreSQL, Redis, and Qdrant.
 
 The React playground includes:
 
-- **Playground** — chat, retrieval mode selector, tenant isolation demo prompts
+- **Playground** — chat, retrieval mode selector, tenant isolation + composite prompts
 - **Documents** — read-only inspect of seeded indexed documents/chunks
 - **Operations** — assets, maintenance history, tickets
 - **Compare Runs** — same question with Standard vs Advanced retrieval
-- **Evaluation** — persisted regression metrics
+- **Evaluation** — persisted regression metrics (including multi-capability)
 - **System Status** — safe readiness view (no secrets/URLs)
-- **Architecture** — system topology and RAG Pipeline Explorer
+- **Architecture** — system topology, orchestration explorer, RAG Pipeline Explorer
 
 Tenant selector loads demo tenants from `GET /api/v1/demo/tenants`. The public
 UI does **not** expose unrestricted document upload.
@@ -201,19 +201,58 @@ knowledge are logically invalidated.
 LangGraph nodes are routed workflow steps — not separate autonomous “agents.”
 
 ```text
-START → Router
-          ├── knowledge → RAG → Finalize → END
-          ├── sql → SQL pipeline → Finalize → END
-          ├── tool → MCP tool node
-          │            ├── read → Finalize → END
-          │            └── write → approval interrupt
-          │                           ├── approve → approved action → Finalize → END
-          │                           └── reject → Finalize → END
-          └── unsupported → fallback → END
+START → Planner (RoutePlan)
+          ├── single capability (fast path; synthesis skipped)
+          │     ├── knowledge → RAG → Finalize → END
+          │     ├── sql → SQL pipeline → Finalize → END
+          │     ├── tool → MCP tool node
+          │     │            ├── read → Finalize → END
+          │     │            └── write → approval interrupt
+          │     │                           ├── approve → approved action → Finalize → END
+          │     │                           └── reject → Finalize → END
+          │     └── unsupported → fallback → END
+          └── multiple capabilities (composite)
+                → parallel read fan-out (RAG / SQL / MCP read-only)
+                → Synthesis
+                → optional Write Gate → HITL → …
+                → Finalize → END
 ```
 
 Production HITL checkpoints use **PostgreSQL** (`AsyncPostgresSaver` on Neon).
 Local default remains `CHECKPOINT_BACKEND=memory`.
+
+## Multi-Capability Orchestration
+
+A structured **planner** selects one or more required capabilities for each
+request. Simple questions keep the existing single-capability fast path.
+Composite questions can invoke RAG + SQL + MCP within one graph invocation:
+
+- Independent read capabilities fan out in parallel
+- Outputs are joined by a grounded **synthesis** node
+- Write actions remain behind HITL approval (allowlisted tools only)
+- Tenant context (`tenant_id` / `tenant_slug`) is preserved across participating
+  capabilities
+
+This is **bounded selective orchestration**, not an unrestricted autonomous
+re-planning loop.
+
+```mermaid
+flowchart TD
+    Q[User Question] --> P[Planner]
+    P --> R[RAG]
+    P --> S[SQL]
+    P --> M[MCP Read]
+    R --> Y[Synthesis]
+    S --> Y
+    M --> Y
+    Y --> W{Write required?}
+    W -->|No| F[Finalize]
+    W -->|Yes| H[HITL Approval]
+    H --> A[Approved Action]
+    A --> F
+```
+
+Single-capability requests bypass synthesis where possible.
 
 ### SQL safety (implemented)
 
@@ -284,14 +323,23 @@ universal production accuracy.
 
 ### Agent evaluation (`evals/results/agent_evaluation.json`)
 
-24 cases:
+33 cases total · 9 composite:
 
 | Metric | Value |
 |--------|-------|
-| Route accuracy | 1.0 |
-| Approval accuracy | 1.0 |
-| Execution success | 1.0 |
-| End-to-end / workflow pass | 1.0 |
+| Route accuracy | 100% |
+| Approval accuracy | 100% |
+| Execution success rate | 100% |
+| End-to-end pass rate | 100% |
+| Required capability recall | 100% |
+| Exact capability-set accuracy | 100% |
+| Unnecessary capability rate | 0% |
+| Per-capability execution success | 100% |
+| Synthesis required-fact coverage | 100% |
+| Tenant correctness | 100% |
+
+These metrics are from the curated regression dataset above — **not** universal
+production accuracy.
 
 ### Retrieval evaluation (`evals/results/retrieval_results.json`)
 
@@ -450,6 +498,14 @@ cd frontend && npm run lint && npm run build
 Retrieval / agent evaluation runners live under `evals/` (see commands in
 [`docs/architecture.md`](docs/architecture.md)).
 
+Before a live agent evaluation, seed demo tenants (cheap preflight fails fast if
+they are missing; the evaluator does not seed production data):
+
+```bash
+cd backend && PYTHONPATH=. uv run --env-file .env.development \
+  python scripts/seed_demo_playground.py
+```
+
 ---
 
 ## Deployment
@@ -512,19 +568,30 @@ sprint implementation.
 
 ## Roadmap
 
-1. Demo video / screenshots / portfolio polish (first)
-2. Sprint 9 multimodal manufacturing use case (later)
-3. Sprint 10 portfolio / evidence polish as appropriate
-4. Sprint 11 repository / code-review intelligence agent
-5. Optional: Azure Blob durable document storage
+Main platform status: **FEATURE FREEZE**.
+
+Active follow-ups:
+
+1. Maintenance, bug fixes, and operational monitoring
+2. Demo / evidence polish (screenshots, video refresh when UI changes warrant it)
+
+Deferred / separate:
+
+- Multimodal manufacturing experiments are **not** on the active roadmap
+- A Code Review / repository intelligence agent would be a **separate project /
+  repository**, not another feature of this platform
+- Optional later: Azure Blob durable document storage
 
 ---
 
 ## Important Limitations
 
 - Public demo uses seeded **synthetic** enterprise data
-- MCP integrations are **demo/simulated**, not a real CMMS/ERP
-- Evaluation datasets are intentionally **small**
+- MCP integrations are **demo/simulated / slug-keyed**, not a live CMMS/ERP
+- Orchestration is **bounded and structured**, not a general autonomous
+  re-planning loop
+- Evaluation datasets are intentionally **small** and curated
+- Write actions remain **allowlisted** and **HITL-gated**
 - Uploaded-file storage is **not** durable Blob Storage
 - No full public authentication / RBAC product layer
 - ACA `minReplicas=0` introduces **cold starts**

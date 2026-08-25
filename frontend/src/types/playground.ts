@@ -80,4 +80,14 @@ export type PromptCategory =
   | 'Structured Data / SQL'
   | 'Live Tools / MCP'
   | 'Human Approval / HITL'
+  | 'Composite / Synthesis'
   | 'Tenant Isolation'
+
+/** Display order for Playground example cards. */
+export const PROMPT_CATEGORY_ORDER: PromptCategory[] = [
+  'Knowledge / RAG',
+  'Structured Data / SQL',
+  'Live Tools / MCP',
+  'Human Approval / HITL',
+  'Composite / Synthesis',
+]

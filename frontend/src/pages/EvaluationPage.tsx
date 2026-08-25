@@ -62,10 +62,79 @@ export function EvaluationPage() {
             </div>
           </section>
 
+          {data.agent.composite_cases != null ||
+          data.agent.required_capability_recall != null ? (
+            <section className="eval-section">
+              <h3 className="eval-section__title">Multi-Capability Orchestration</h3>
+              <p className="page-note">
+                Composite regression metrics from the same curated agent golden set. These are not
+                claims of universal production accuracy.
+              </p>
+              <div className="metric-grid">
+                {data.agent.required_capability_recall != null ? (
+                  <article className="metric-card">
+                    <h4>Required Capability Recall</h4>
+                    <p className="metric-card__value">
+                      {pct(data.agent.required_capability_recall)}
+                    </p>
+                  </article>
+                ) : null}
+                {data.agent.exact_capability_set_accuracy != null ? (
+                  <article className="metric-card">
+                    <h4>Exact Capability-Set Accuracy</h4>
+                    <p className="metric-card__value">
+                      {pct(data.agent.exact_capability_set_accuracy)}
+                    </p>
+                  </article>
+                ) : null}
+                {data.agent.unnecessary_capability_rate != null ? (
+                  <article className="metric-card">
+                    <h4>Unnecessary Capability Rate</h4>
+                    <p className="metric-card__value">
+                      {pct(data.agent.unnecessary_capability_rate)}
+                    </p>
+                  </article>
+                ) : null}
+                {data.agent.per_capability_execution_success != null ? (
+                  <article className="metric-card">
+                    <h4>Per-Capability Execution Success</h4>
+                    <p className="metric-card__value">
+                      {pct(data.agent.per_capability_execution_success)}
+                    </p>
+                  </article>
+                ) : null}
+                {data.agent.synthesis_required_fact_coverage != null ? (
+                  <article className="metric-card">
+                    <h4>Synthesis Required-Fact Coverage</h4>
+                    <p className="metric-card__value">
+                      {pct(data.agent.synthesis_required_fact_coverage)}
+                    </p>
+                  </article>
+                ) : null}
+                {data.agent.tenant_correctness != null ? (
+                  <article className="metric-card">
+                    <h4>Tenant Correctness</h4>
+                    <p className="metric-card__value">{pct(data.agent.tenant_correctness)}</p>
+                  </article>
+                ) : null}
+                {data.agent.composite_cases != null ? (
+                  <article className="metric-card">
+                    <h4>Composite Cases</h4>
+                    <p className="metric-card__value">{data.agent.composite_cases}</p>
+                  </article>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+
           <section className="eval-section">
             <h3 className="eval-section__title">Retrieval strategy comparison</h3>
             <p className="page-note">
-              Agent cases: {data.agent.total_cases} · k={data.retrieval.eval_k}
+              Agent cases: {data.agent.total_cases}
+              {data.agent.composite_cases != null
+                ? ` · composite: ${data.agent.composite_cases}`
+                : null}{' '}
+              · k={data.retrieval.eval_k}
             </p>
             <div className="table-wrap">
               <table className="data-table">

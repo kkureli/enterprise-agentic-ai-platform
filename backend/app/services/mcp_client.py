@@ -46,9 +46,19 @@ async def list_maintenance_tools():
 async def call_maintenance_tool(
     name: str,
     arguments: dict[str, Any],
+    *,
+    tenant_slug: str | None = None,
 ):
+    """Invoke an MCP tool, injecting tenant_slug for tenant-scoped demo data."""
+
+    payload = dict(arguments or {})
+    if tenant_slug:
+        payload["tenant_slug"] = tenant_slug
+    if not payload.get("tenant_slug"):
+        raise ValueError("tenant_slug is required for MCP tool calls.")
+
     async with maintenance_mcp_session() as session:
         return await session.call_tool(
             name,
-            arguments=arguments,
+            payload,
         )

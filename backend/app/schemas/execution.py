@@ -54,6 +54,7 @@ class ToolDetails(BaseModel):
     requires_approval: bool | None = None
     approval_status: str | None = None
     action_result: dict[str, Any] | None = None
+    tenant_slug: str | None = None
 
 
 class HitlDetails(BaseModel):
@@ -81,16 +82,20 @@ class CostDetails(BaseModel):
 class TimingDetails(BaseModel):
     total_ms: float | None = None
     router_ms: float | None = None
+    planner_ms: float | None = None
     retrieval_ms: float | None = None
     reranking_ms: float | None = None
     sql_generation_ms: float | None = None
     sql_execution_ms: float | None = None
     tool_execution_ms: float | None = None
     llm_generation_ms: float | None = None
+    synthesis_ms: float | None = None
+    write_gate_ms: float | None = None
 
 
 class ExecutionDetails(BaseModel):
     route: str | None = None
+    selected_capabilities: list[str] = Field(default_factory=list)
     graph_path: list[str] = Field(default_factory=list)
     retrieval: RetrievalDetails | None = None
     sources: list[RetrievalChunkDetail] | None = None

@@ -1,3 +1,4 @@
+import { OrchestrationExplorer } from '../components/OrchestrationExplorer'
 import { RagPipelineExplorer } from '../components/RagPipelineExplorer'
 import type { PlaygroundPage } from '../types/playground'
 
@@ -26,7 +27,8 @@ export function ArchitecturePage({ onNavigate }: ArchitecturePageProps) {
       <header className="page-header">
         <h2 className="page-header__title">Architecture</h2>
         <p className="page-header__subtitle">
-          System topology plus an inspectable map of the real multi-tenant RAG pipeline.
+          System topology, selective multi-capability orchestration, and an inspectable map of the
+          multi-tenant RAG pipeline.
         </p>
       </header>
 
@@ -68,11 +70,16 @@ export function ArchitecturePage({ onNavigate }: ArchitecturePageProps) {
         </p>
 
         <p className="page-note">
-          The in-app Execution Trace panel shows a safe, curated per-request summary (route, graph
-          path, retrieval, SQL, tools, tokens, estimated cost). Langfuse remains the deep
-          production observability system and is not called from the public frontend.
+          The in-app Execution Trace panel shows a safe, curated per-request summary (selected
+          capabilities, graph path, retrieval, SQL, tools, HITL, tokens, estimated cost). Langfuse
+          remains the deep production observability system and is not called from the public
+          frontend.
         </p>
       </section>
+
+      <hr className="arch-divider" />
+
+      <OrchestrationExplorer />
 
       <hr className="arch-divider" />
 

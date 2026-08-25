@@ -5,6 +5,7 @@ import { ChatComposer } from '../components/ChatComposer'
 import { ChatMessageItem } from '../components/ChatMessage'
 import { getExamplePrompts } from '../lib/examplePrompts'
 import type { ChatMessage, ExecutionDetails, RetrievalMode } from '../types/agent'
+import { PROMPT_CATEGORY_ORDER } from '../types/playground'
 
 type PlaygroundChatProps = {
   tenantId: string
@@ -41,7 +42,9 @@ export function PlaygroundChat({
   onApprovalResolved,
 }: PlaygroundChatProps) {
   const prompts = getExamplePrompts(tenantName)
-  const categories = [...new Set(prompts.map((item) => item.category))]
+  const categories = PROMPT_CATEGORY_ORDER.filter((category) =>
+    prompts.some((item) => item.category === category),
+  )
 
   return (
     <div className="playground-chat">
@@ -51,28 +54,39 @@ export function PlaygroundChat({
       />
 
       <div className="prompt-categories">
-        {categories.map((category) => (
-          <section key={category} className="prompt-category">
-            <h3 className="prompt-category__title">{category}</h3>
-            <div className="prompt-category__list">
-              {prompts
-                .filter((item) => item.category === category)
-                .map((item) => (
-                  <button
-                    key={`${category}-${item.prompt}`}
-                    type="button"
-                    className="prompt-category__button"
-                    disabled={isSending}
-                    title={item.prompt}
-                    aria-label={item.prompt}
-                    onClick={() => onSelectPrompt(item.prompt)}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-            </div>
-          </section>
-        ))}
+        {categories.map((category) => {
+          const isComposite = category === 'Composite / Synthesis'
+          return (
+            <section
+              key={category}
+              className={
+                isComposite ? 'prompt-category prompt-category--composite' : 'prompt-category'
+              }
+            >
+              <h3 className="prompt-category__title">{category}</h3>
+              {isComposite ? (
+                <p className="prompt-category__caption">RAG + SQL + MCP</p>
+              ) : null}
+              <div className="prompt-category__list">
+                {prompts
+                  .filter((item) => item.category === category)
+                  .map((item) => (
+                    <button
+                      key={`${category}-${item.prompt}`}
+                      type="button"
+                      className="prompt-category__button"
+                      disabled={isSending}
+                      title={item.prompt}
+                      aria-label={item.prompt}
+                      onClick={() => onSelectPrompt(item.prompt)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+              </div>
+            </section>
+          )
+        })}
       </div>
 
       <div className="chat-panel">
@@ -82,7 +96,7 @@ export function PlaygroundChat({
               <h2 className="empty-state__title">Ask the agent</h2>
               <p className="empty-state__subtitle">
                 Use a suggested prompt or type your own question for {tenantName}. Answers come
-                from the live RAG, SQL, MCP, and HITL pipeline.
+                from the live RAG, SQL, MCP, composite synthesis, and HITL pipeline.
               </p>
             </div>
           ) : (

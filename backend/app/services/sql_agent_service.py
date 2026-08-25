@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 from typing import Any
 from uuid import UUID
@@ -7,12 +8,14 @@ from pydantic import BaseModel
 from sqlglot import exp, parse
 
 from app.services.llm_service import get_chat_model
-from app.services.sql_generation_service import generate_sql
+from app.services.sql_generation_service import generate_sql, repair_sql
 from app.services.sql_query_service import (
     UnsafeSQLQueryError,
     execute_readonly_sql,
     validate_readonly_sql,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SQLAgentResult(BaseModel):
@@ -27,6 +30,7 @@ class SQLAgentResult(BaseModel):
     generation_duration_ms: float | None = None
     execution_duration_ms: float | None = None
     llm_generation_ms: float | None = None
+    repaired: bool = False
 
 
 SYSTEM_PROMPT = """
@@ -58,22 +62,40 @@ def _extract_tables(sql: str) -> list[str]:
     return sorted({table.name for table in statements[0].find_all(exp.Table)})
 
 
+async def _generate_and_validate_sql(question: str) -> tuple[str, bool, float]:
+    """Generate SQL, validate, and apply at most one safety repair if needed."""
+
+    generation_started = time.perf_counter()
+    sql = await generate_sql(question)
+    repaired = False
+
+    try:
+        validate_readonly_sql(sql)
+    except UnsafeSQLQueryError as exc:
+        logger.info(
+            "SQL validation failed; attempting one bounded repair. error=%s sql=%s",
+            exc,
+            sql,
+        )
+        rejected = sql
+        sql = await repair_sql(question, rejected, str(exc))
+        repaired = True
+        # Second validation must pass; never execute rejected SQL.
+        validate_readonly_sql(sql)
+
+    generation_duration_ms = round((time.perf_counter() - generation_started) * 1000, 2)
+    return sql, repaired, generation_duration_ms
+
+
 async def answer_with_sql(
     tenant_id: UUID,
     question: str,
 ) -> SQLAgentResult:
-    generation_started = time.perf_counter()
-    sql = await generate_sql(question)
-    generation_duration_ms = round((time.perf_counter() - generation_started) * 1000, 2)
+    sql, repaired, generation_duration_ms = await _generate_and_validate_sql(question)
 
-    try:
-        validate_readonly_sql(sql)
-        validation_status = "passed"
-        tenant_scope_verified = True
-        read_only_verified = True
-    except UnsafeSQLQueryError:
-        raise
-
+    validation_status = "passed"
+    tenant_scope_verified = True
+    read_only_verified = True
     tables_used = _extract_tables(sql)
 
     execution_started = time.perf_counter()
@@ -127,4 +149,5 @@ SQL result:
         generation_duration_ms=generation_duration_ms,
         execution_duration_ms=execution_duration_ms,
         llm_generation_ms=llm_generation_ms,
+        repaired=repaired,
     )

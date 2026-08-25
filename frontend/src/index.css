@@ -554,9 +554,15 @@ code,
 
 .prompt-categories {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
   margin-bottom: 1.15rem;
+}
+
+@media (min-width: 900px) {
+  .prompt-categories {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .prompt-category {
@@ -567,6 +573,10 @@ code,
   box-shadow: var(--shadow-sm);
 }
 
+.prompt-category--composite {
+  grid-column: 1 / -1;
+}
+
 .prompt-category__title {
   margin: 0 0 0.55rem;
   font-size: 0.72rem;
@@ -574,6 +584,18 @@ code,
   letter-spacing: 0.045em;
   color: var(--text-muted);
   font-weight: 700;
+}
+
+.prompt-category--composite .prompt-category__title {
+  margin-bottom: 0.2rem;
+}
+
+.prompt-category__caption {
+  margin: 0 0 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  letter-spacing: 0.02em;
 }
 
 .prompt-category__list {
@@ -1503,6 +1525,49 @@ code,
   gap: 0.2rem;
 }
 
+.graph-path--compact {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed var(--border);
+}
+
+.graph-path--compact .graph-path__item {
+  align-items: center;
+}
+
+.graph-composite {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.graph-composite__stage {
+  display: flex;
+}
+
+.graph-composite__fanout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.15rem 0 0.1rem;
+  padding-left: 0.35rem;
+  border-left: 2px solid var(--border);
+}
+
+.graph-composite__arrow {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding-left: 0.35rem;
+}
+
+.graph-path__node--branch {
+  background: var(--surface-muted);
+}
+
 .graph-path__item {
   display: flex;
   flex-direction: column;
@@ -1858,6 +1923,42 @@ code,
   border: none;
   border-top: 1px solid var(--border);
   margin: 2rem 0;
+}
+
+.orch-explorer {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.orch-path-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.85rem;
+}
+
+.orch-path-card {
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: var(--surface);
+}
+
+.orch-path-card__title {
+  margin: 0 0 0.55rem;
+  font-size: 0.95rem;
+}
+
+.orch-path-card__steps {
+  margin: 0 0 0.65rem;
+  padding-left: 1.1rem;
+  color: var(--text);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.orch-path-card__steps li + li {
+  margin-top: 0.2rem;
 }
 
 .arch-system {

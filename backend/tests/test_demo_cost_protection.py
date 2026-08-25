@@ -218,8 +218,10 @@ async def test_evaluations_endpoint_sanitized(client):
     data = response.json()
 
     assert "disclaimer" in data
-    assert data["agent"]["total_cases"] == 24
+    assert data["agent"]["total_cases"] == 33
     assert data["agent"]["route_accuracy"] == 1.0
+    assert data["agent"]["required_capability_recall"] == 1.0
+    assert data["agent"]["composite_cases"] == 9
     assert "strategies" in data["retrieval"]
     serialized = str(data).lower()
     assert "azure" not in serialized
@@ -259,7 +261,9 @@ async def test_system_status_exposes_no_secrets(client, monkeypatch):
 
 def test_evaluation_summary_matches_packaged_metrics():
     summary = load_evaluation_summary()
-    assert summary.agent.total_cases == 24
+    assert summary.agent.total_cases == 33
     assert summary.agent.route_accuracy == 1.0
+    assert summary.agent.required_capability_recall == 1.0
+    assert summary.agent.composite_cases == 9
     assert summary.retrieval.num_queries == 15
     assert any(s.name == "Hybrid" for s in summary.retrieval.strategies)

@@ -151,49 +151,80 @@ Grounded Answer + Sources
 CrossEncoder always receives the original user query. Expansion queries are used
 only for candidate retrieval.
 
-## Agent Orchestration (Sprint 3–5)
+## Agent Orchestration (Sprint 3–5 + multi-capability)
 
-The agent layer is a **router-based LangGraph graph**, not a full multi-agent
-supervisor. RAG, SQL, and MCP tools are capabilities; MCP does not expose REST
-endpoints.
+The agent layer is a **selective multi-capability LangGraph graph**, not a full
+multi-agent supervisor. RAG, SQL, and MCP tools remain capabilities; MCP does
+not expose REST endpoints.
+
+Nodes are workflow steps — not autonomous agents.
 
 ### Implemented graph
 
 ```text
 START
   ↓
-LLM Router
-  ├── knowledge → RAG Node → Finalize → END
-  ├── sql → SQL Node → Finalize → END
-  ├── tool → MCP Tool Node
-  │            ├── (read tool) → Finalize → END
-  │            └── (write tool) → Approval
-  │                                 ├── approved → Approved Action → Finalize → END
-  │                                 └── rejected → Finalize → END
-  └── unsupported → Fallback → END
+Planner (structured RoutePlan)
+  ├── single capability (fast path, no synthesis LLM)
+  │     ├── knowledge → RAG → Finalize → END
+  │     ├── sql → SQL → Finalize → END
+  │     ├── tool → MCP Tool Node
+  │     │            ├── read → Finalize → END
+  │     │            └── write → Approval → … → Finalize → END
+  │     └── unsupported → Fallback → END
+  └── multiple capabilities (composite)
+        → parallel fan-out of selected reads (RAG / SQL / MCP read-only)
+        → Synthesis
+        → optional Write Gate (allowlisted HITL only)
+        → Finalize → END
 ```
+
+### Planner contract
+
+`RoutePlan` returns:
+
+- `routes: list[AgentRoute]` (deduplicated; minimum set required)
+- `requires_synthesis: bool` (true when `len(routes) >= 2`)
+- `may_require_write: bool` (ticket creation / explicit write intent)
+
+Ordinary questions still select **exactly one** capability. Composite execution
+runs only when the planner selects two or more read capabilities.
 
 ### Routing responsibilities
 
-1. The **LLM Router** selects the capability category:
+1. The **Planner** selects one or more capability categories:
    - `knowledge` — enterprise documents / knowledge base
    - `sql` — structured operational data in PostgreSQL
    - `tool` — MCP tools / enterprise actions (writes require HITL)
    - `unsupported` — capabilities not currently available
-2. On the `tool` path, the **MCP Tool Node's LLM** selects the specific MCP tool.
-3. On the `sql` path, the SQL node generates, validates, and executes read-only SQL.
-4. **MCP itself does not create REST endpoints.** Agent HTTP surfaces are:
+2. Composite `tool` fan-out is **read-only** (`get_asset_status` /
+   `get_maintenance_history`). Writes never run during parallel evidence gathering.
+3. On the single-route `tool` path, the MCP Tool Node may still select a write
+   tool and pause for HITL (unchanged safety).
+4. After composite synthesis, an optional **Write Gate** may propose only
+   allowlisted `create_maintenance_ticket` actions for HITL.
+5. MCP read/write tool calls require `tenant_slug` so demo MCP data cannot cross
+   tenants. RAG and SQL remain tenant-scoped via `tenant_id`.
+6. **MCP itself does not create REST endpoints.** Agent HTTP surfaces are:
    - `POST /api/v1/tenants/{tenant_id}/agent`
    - `POST /api/v1/tenants/{tenant_id}/agent/{thread_id}/approval`
+
+Response fields `planned_routes` and `requires_synthesis` are additive; `route`
+remains the primary/first capability for backward compatibility.
 
 ### Shared state
 
 ```text
 AgentState
 ├── tenant_id
+├── tenant_slug         # demo MCP tenant key (required for MCP)
 ├── query
 ├── retrieval_mode      # standard | advanced
-├── route               # knowledge | sql | tool | unsupported
+├── route               # primary/first capability (API compat)
+├── planned_routes      # selected capabilities
+├── requires_synthesis
+├── may_require_write
+├── tool_read_only      # composite tool fan-out = reads only
 ├── requires_approval
 ├── pending_action
 ├── approval_granted
@@ -202,6 +233,7 @@ AgentState
 ├── rag_answer
 ├── tool_answer
 ├── sql_answer
+├── synthesis_answer
 └── final_answer
 ```
 
@@ -216,8 +248,8 @@ thread_id = new UUID
   ↓
 agent_graph.ainvoke(..., config={configurable: {thread_id}})
   ↓
-├── __interrupt__ → { thread_id, status=approval_required, route, answer, pending_action }
-└── completed     → { thread_id, status=completed, route, answer }
+├── __interrupt__ → { thread_id, status=approval_required, route, planned_routes?, answer, pending_action }
+└── completed     → { thread_id, status=completed, route, planned_routes?, requires_synthesis?, answer }
 ```
 
 Approval resume:
@@ -290,7 +322,7 @@ nested span context for debugging.
 
 ### Golden dataset
 
-`evals/agent/golden_dataset.json` — **24 cases**:
+`evals/agent/golden_dataset.json` — **33 cases** (9 composite):
 
 | Category | Cases | Checks |
 |----------|-------|--------|
@@ -299,6 +331,11 @@ nested span context for debugging.
 | tool (read) | 2 | MCP route, no approval |
 | tool (write / HITL) | 4 | MCP route, approval interrupt |
 | unsupported | 6 | Fallback route, no approval |
+| composite (RAG/SQL/MCP mixes + HITL + tenant) | 9 | planned_routes, synthesis, approval where expected |
+
+The planner selects **one or more** required capabilities. Single-capability
+queries stay on the fast path; composite queries fan out selected read
+capabilities and join at synthesis.
 
 ### Evaluation runners
 
@@ -314,20 +351,39 @@ evals/results/agent_evaluation.json      → persisted metrics + per-case result
 
 End-to-end evaluation checks:
 
-- `expected_route` vs actual route
+- `expected_route` / `expected_routes` vs actual planned capabilities
 - `expected_approval` vs actual interrupt
 - answer present (non-empty)
+- composite metrics: required capability recall, exact capability-set accuracy,
+  unnecessary capability rate, per-capability execution success, synthesis
+  required-fact coverage, tenant correctness
+
+`run_agent_evaluation.py` runs a cheap tenant preflight before any agent/LLM
+calls. Missing demo tenants fail immediately with a clear list; seed locally
+first (the evaluator does not seed production data):
+
+```bash
+cd backend && PYTHONPATH=. uv run --env-file .env.development \
+  python scripts/seed_demo_playground.py
+```
 
 ### Current benchmark (regression artifact)
 
 | Metric | Result |
 |--------|--------|
-| Route accuracy | 24/24 |
-| Approval accuracy | 24/24 |
-| Execution success | 24/24 |
-| Workflow regression pass rate | 24/24 |
+| Route accuracy | 33/33 (100%) |
+| Approval accuracy | 33/33 (100%) |
+| Execution success | 33/33 (100%) |
+| End-to-end pass rate | 33/33 (100%) |
+| Required capability recall | 100% |
+| Exact capability-set accuracy | 100% |
+| Unnecessary capability rate | 0% |
+| Per-capability execution success | 100% |
+| Synthesis required-fact coverage | 100% |
+| Tenant correctness | 100% |
+| Composite cases | 9 |
 
-These results are from a **small 24-case golden dataset** used for local
+These results are from a **small curated 33-case golden dataset** used for local
 regression — they are **not** production-wide accuracy, answer-quality, or
 reliability claims.
 
@@ -847,8 +903,9 @@ evals/agent/run_agent_evaluation.py
 evals/results/agent_evaluation.json
 ```
 
-The retrieval golden set (15 queries) and agent golden set (24 cases) are
-intentionally small regression artifacts — not large-scale production benchmarks.
+The retrieval golden set (15 queries) and agent golden set (33 cases, 9
+composite) are intentionally small regression artifacts — not large-scale
+production benchmarks.
 
 Critical agent API tests cover graph result mapping (including approval-required
 tool paths), invalid `retrieval_mode` validation (422), and controlled graph

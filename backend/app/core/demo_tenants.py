@@ -40,3 +40,9 @@ DEMO_TENANTS: tuple[DemoTenantSpec, ...] = (
 )
 
 DEMO_TENANT_NAMES: frozenset[str] = frozenset(spec.name for spec in DEMO_TENANTS)
+
+DEMO_TENANT_SLUG_BY_NAME: dict[str, str] = {spec.name: spec.slug for spec in DEMO_TENANTS}
+
+
+def demo_tenant_slug_for_name(name: str) -> str | None:
+    return DEMO_TENANT_SLUG_BY_NAME.get(name)

@@ -50,19 +50,124 @@ function routeLabel(route?: string | null): string {
   }
 }
 
+function capabilityLabel(route: string): string {
+  switch (route) {
+    case 'knowledge':
+      return 'RAG'
+    case 'sql':
+      return 'SQL'
+    case 'tool':
+      return 'MCP'
+    default:
+      return route
+  }
+}
+
 function nodeLabel(node: string): string {
   const labels: Record<string, string> = {
+    planner: 'Planner',
     router: 'Router',
     rag: 'RAG',
     sql: 'SQL',
-    tool: 'Tool',
-    approval: 'Approval',
+    tool: 'MCP',
+    synthesize: 'Synthesis',
+    write_gate: 'Write Gate',
+    approval: 'HITL',
     approved_action: 'Approved Action',
     finalize: 'Finalize',
     fallback: 'Fallback',
   }
 
   return labels[node] ?? node
+}
+
+function CompositeGraphSketch({
+  selectedCapabilities,
+  graphPath,
+}: {
+  selectedCapabilities: string[]
+  graphPath: string[]
+}) {
+  const hasWriteGate = graphPath.includes('write_gate')
+  const hasHitl = graphPath.includes('approval')
+  const hasApprovedAction = graphPath.includes('approved_action')
+  const toolIsRead = selectedCapabilities.includes('tool')
+
+  return (
+    <div className="graph-composite" aria-label="Composite orchestration path">
+      <p className="trace-note">
+        Selective multi-capability orchestration: planner fans out only the required reads,
+        then joins at grounded synthesis
+        {hasWriteGate ? ', with optional write gate / HITL' : ''}.
+      </p>
+      <div className="graph-composite__stage">
+        <span className="graph-path__node trace-mono">Planner</span>
+      </div>
+      <div className="graph-composite__fanout" aria-label="Parallel read capabilities">
+        {selectedCapabilities.map((cap) => (
+          <span key={cap} className="graph-path__node graph-path__node--branch trace-mono">
+            {cap === 'tool' && toolIsRead ? 'MCP Read' : capabilityLabel(cap)}
+          </span>
+        ))}
+      </div>
+      <div className="graph-composite__arrow" aria-hidden="true">
+        ↓
+      </div>
+      <div className="graph-composite__stage">
+        <span className="graph-path__node trace-mono">Synthesis</span>
+      </div>
+      {hasWriteGate ? (
+        <>
+          <div className="graph-composite__arrow" aria-hidden="true">
+            ↓
+          </div>
+          <div className="graph-composite__stage">
+            <span className="graph-path__node trace-mono">Write Gate</span>
+          </div>
+        </>
+      ) : null}
+      {hasHitl ? (
+        <>
+          <div className="graph-composite__arrow" aria-hidden="true">
+            ↓
+          </div>
+          <div className="graph-composite__stage">
+            <span className="graph-path__node trace-mono">HITL</span>
+          </div>
+        </>
+      ) : null}
+      {hasApprovedAction ? (
+        <>
+          <div className="graph-composite__arrow" aria-hidden="true">
+            ↓
+          </div>
+          <div className="graph-composite__stage">
+            <span className="graph-path__node trace-mono">Approved Action</span>
+          </div>
+        </>
+      ) : null}
+      <div className="graph-composite__arrow" aria-hidden="true">
+        ↓
+      </div>
+      <div className="graph-composite__stage">
+        <span className="graph-path__node trace-mono">Finalize</span>
+      </div>
+      {graphPath.length > 0 ? (
+        <ol className="graph-path graph-path--compact">
+          {graphPath.map((node, index) => (
+            <li key={`${node}-${index}`} className="graph-path__item">
+              <span className="graph-path__node trace-mono">{nodeLabel(node)}</span>
+              {index < graphPath.length - 1 ? (
+                <span className="graph-path__arrow" aria-hidden="true">
+                  →
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </div>
+  )
 }
 
 function ChunkInspector({ chunk, title }: { chunk: RetrievalChunkDetail; title?: string }) {
@@ -143,9 +248,12 @@ export function ExecutionTrace({ details }: ExecutionTraceProps) {
   const cache = details.cache
   const sources = details.sources ?? []
   const graphPath = details.graph_path ?? []
+  const selectedCapabilities = details.selected_capabilities ?? []
+  const isComposite = selectedCapabilities.length > 1
 
   const hasOverview =
     details.route ||
+    selectedCapabilities.length > 0 ||
     cache ||
     usage ||
     timing?.total_ms != null ||
@@ -163,7 +271,18 @@ export function ExecutionTrace({ details }: ExecutionTraceProps) {
         {hasOverview ? (
           <Section title="Overview">
             <dl className="trace-kv">
-              <Kv label="Route" value={routeLabel(details.route)} />
+              <Kv
+                label="Selected capabilities"
+                value={
+                  selectedCapabilities.length
+                    ? selectedCapabilities.map(capabilityLabel).join(' · ')
+                    : null
+                }
+              />
+              <Kv
+                label={isComposite ? 'Primary route' : 'Route'}
+                value={routeLabel(details.route)}
+              />
               <Kv
                 label="Retrieval"
                 value={
@@ -180,6 +299,9 @@ export function ExecutionTrace({ details }: ExecutionTraceProps) {
               />
               <Kv label="LLM calls" value={usage?.llm_call_count} />
               <Kv label="Total latency" value={formatMs(timing?.total_ms)} />
+              <Kv label="Planner" value={formatMs(timing?.planner_ms ?? timing?.router_ms)} />
+              <Kv label="Synthesis" value={formatMs(timing?.synthesis_ms)} />
+              <Kv label="Write gate" value={formatMs(timing?.write_gate_ms)} />
               <Kv label="Tokens" value={formatTokens(usage?.total_tokens)} />
               <Kv
                 label={cost?.label ?? 'Estimated cost'}
@@ -192,18 +314,25 @@ export function ExecutionTrace({ details }: ExecutionTraceProps) {
 
         {graphPath.length > 0 ? (
           <Section title="Graph">
-            <ol className="graph-path">
-              {graphPath.map((node, index) => (
-                <li key={`${node}-${index}`} className="graph-path__item">
-                  <span className="graph-path__node trace-mono">{nodeLabel(node)}</span>
-                  {index < graphPath.length - 1 ? (
-                    <span className="graph-path__arrow" aria-hidden="true">
-                      ↓
-                    </span>
-                  ) : null}
-                </li>
-              ))}
-            </ol>
+            {isComposite ? (
+              <CompositeGraphSketch
+                selectedCapabilities={selectedCapabilities}
+                graphPath={graphPath}
+              />
+            ) : (
+              <ol className="graph-path">
+                {graphPath.map((node, index) => (
+                  <li key={`${node}-${index}`} className="graph-path__item">
+                    <span className="graph-path__node trace-mono">{nodeLabel(node)}</span>
+                    {index < graphPath.length - 1 ? (
+                      <span className="graph-path__arrow" aria-hidden="true">
+                        ↓
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
+            )}
           </Section>
         ) : null}
 
@@ -295,6 +424,7 @@ export function ExecutionTrace({ details }: ExecutionTraceProps) {
             <dl className="trace-kv">
               <Kv label="MCP server" value={tools.mcp_server} mono />
               <Kv label="Tool" value={tools.tool_name} mono />
+              <Kv label="Tenant" value={tools.tenant_slug} mono />
               <Kv label="Type" value={tools.tool_type} />
               <Kv label="Requires approval" value={tools.requires_approval} />
               <Kv label="Approval status" value={tools.approval_status} />
@@ -325,12 +455,14 @@ export function ExecutionTrace({ details }: ExecutionTraceProps) {
           <Section title="Performance">
             <dl className="trace-kv">
               <Kv label="Total" value={formatMs(timing.total_ms)} />
-              <Kv label="Router" value={formatMs(timing.router_ms)} />
+              <Kv label="Planner" value={formatMs(timing.planner_ms ?? timing.router_ms)} />
               <Kv label="Retrieval" value={formatMs(timing.retrieval_ms)} />
               <Kv label="Reranking" value={formatMs(timing.reranking_ms)} />
               <Kv label="SQL generation" value={formatMs(timing.sql_generation_ms)} />
               <Kv label="SQL execution" value={formatMs(timing.sql_execution_ms)} />
               <Kv label="Tool execution" value={formatMs(timing.tool_execution_ms)} />
+              <Kv label="Synthesis" value={formatMs(timing.synthesis_ms)} />
+              <Kv label="Write gate" value={formatMs(timing.write_gate_ms)} />
               <Kv label="LLM generation" value={formatMs(timing.llm_generation_ms)} />
             </dl>
           </Section>

@@ -1,112 +1,165 @@
+"""Selective multi-capability planner (replaces mutually exclusive router)."""
+
+from __future__ import annotations
+
 import time
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from app.agents.execution_trace import node_trace
-from app.agents.state import AgentRoute, AgentState
+from app.agents.state import AgentRoute, AgentState, ReadCapability
 from app.services.llm_service import get_chat_model
 
-
-class RouteDecision(BaseModel):
-    route: AgentRoute
+READ_ROUTES: frozenset[str] = frozenset({"knowledge", "sql", "tool"})
 
 
-ROUTER_SYSTEM_PROMPT = """
-You are a routing component for an enterprise AI operations platform.
+class RoutePlan(BaseModel):
+    """Structured selective plan for one user question."""
 
-Choose exactly one route:
+    routes: list[AgentRoute] = Field(default_factory=list)
+    requires_synthesis: bool = False
+    may_require_write: bool = False
 
-knowledge:
-Use for questions that require enterprise knowledge documents,
-policies, manuals, procedures, troubleshooting guides, or internal
-knowledge base content.
+    @field_validator("routes")
+    @classmethod
+    def _normalize_routes(cls, value: list[AgentRoute]) -> list[AgentRoute]:
+        return normalize_planned_routes(value)
 
-sql:
-Use for questions that require querying historical or structured
-operational data stored in PostgreSQL.
+
+def normalize_planned_routes(routes: list[AgentRoute] | None) -> list[AgentRoute]:
+    """Deduplicate while preserving order; drop unsupported when mixed with reads."""
+    if not routes:
+        return ["unsupported"]
+
+    ordered: list[AgentRoute] = []
+    seen: set[str] = set()
+    for route in routes:
+        if route in seen:
+            continue
+        seen.add(route)
+        ordered.append(route)
+
+    read_selected = [route for route in ordered if route in READ_ROUTES]
+    if read_selected:
+        return read_selected
+
+    if "unsupported" in ordered:
+        return ["unsupported"]
+
+    return ["unsupported"]
+
+
+def finalize_plan(plan: RoutePlan) -> RoutePlan:
+    routes = normalize_planned_routes(plan.routes)
+    requires_synthesis = len(routes) >= 2
+    may_require_write = bool(plan.may_require_write)
+    # Writes are never part of parallel evidence gathering.
+    if requires_synthesis:
+        may_require_write = may_require_write
+    return RoutePlan(
+        routes=routes,
+        requires_synthesis=requires_synthesis,
+        may_require_write=may_require_write,
+    )
+
+
+PLANNER_SYSTEM_PROMPT = """
+You are a selective planner for an enterprise AI operations platform.
+
+Select the minimum set of capabilities required to answer the user question.
+Do NOT select every capability by default.
+
+Valid capability routes:
+- knowledge: enterprise documents, policies, manuals, procedures, error-code meaning
+- sql: historical / structured operational data in PostgreSQL (counts, lists, history, tickets)
+- tool: live operational MCP tools (current asset status) and/or creating a maintenance ticket
+- unsupported: no available capability applies
+
+Rules:
+1. Ordinary questions should select exactly ONE capability.
+2. Select multiple capabilities ONLY when the user clearly needs more than one
+   information source in the same question.
+3. Deduplicate. Never list the same route twice.
+4. Set requires_synthesis=true only when two or more read capabilities are selected.
+5. Set may_require_write=true ONLY when the user asks to create/open a maintenance
+   ticket or explicitly requests a write action. Do not set it for status/history
+   questions alone.
+6. If the question mixes ticket creation with evidence gathering, include the
+   needed read capabilities AND set may_require_write=true.
+7. Prefer sql for historical maintenance records and lists; prefer tool for
+   CURRENT live operational status of a specific asset.
+8. Prefer knowledge for "what does X mean" / procedures / documentation.
 
 Examples:
-- counts and aggregates
-- lists of assets
-- filtering assets by status
-- maintenance history
-- existing maintenance tickets
-- historical maintenance records
 
-Prefer sql when the user asks about multiple records, lists,
-aggregations, filtering, or historical structured data.
+"What does E-100 mean?"
+→ routes=["knowledge"], requires_synthesis=false, may_require_write=false
 
-tool:
-Use only for currently available operational capabilities:
+"Which assets have warnings?"
+→ routes=["sql"], requires_synthesis=false, may_require_write=false
 
-1. Getting the current live operational status of a specific asset.
-2. Creating a maintenance ticket.
+"What is MACHINE-42's current status?"
+→ routes=["tool"], requires_synthesis=false, may_require_write=false
 
-Examples:
-- "What is the current status of MACHINE-42?" -> tool
-- "Check MACHINE-17 right now." -> tool
-- "Create a maintenance ticket for MACHINE-42." -> tool
+"Create a high-priority maintenance ticket for MACHINE-42 because of hydraulic pressure loss."
+→ routes=["tool"], requires_synthesis=false, may_require_write=true
 
-Do not route arbitrary enterprise actions to tool.
-If no available tool supports the requested action, use unsupported.
+"Use the enterprise system to create a ticket for MACHINE-42."
+→ routes=["tool"], requires_synthesis=false, may_require_write=true
 
-unsupported:
-Use when the request requires a capability that is not available.
+"What does E-100 mean and what is MACHINE-42's status?"
+→ routes=["knowledge","tool"], requires_synthesis=true, may_require_write=false
 
-Examples:
-- sending email
-- booking flights
-- ordering external parts
-- weather
-- financial market prices
-- external news
-
-Important distinctions:
-
-"What does error AX-4317 mean?"
--> knowledge
-
-"Which assets are currently in warning state?"
--> sql
-
-"How many maintenance records does MACHINE-42 have?"
--> sql
-
-"Show the maintenance history for MACHINE-42."
--> sql
-
-"What is the current operational status of MACHINE-42?"
--> tool
-
-"Create a maintenance ticket for MACHINE-42."
--> tool
+"What does E-100 mean and MACHINE-42 history + current status?"
+→ routes=["knowledge","sql","tool"], requires_synthesis=true, may_require_write=false
 
 "Send an email to the maintenance manager."
--> unsupported
+→ routes=["unsupported"], requires_synthesis=false, may_require_write=false
 
-Return only the structured routing decision.
+Return only the structured plan.
 """.strip()
 
 
-async def router_node(state: AgentState) -> dict:
+async def planner_node(state: AgentState) -> dict:
     started = time.perf_counter()
 
-    model = get_chat_model().with_structured_output(RouteDecision)
-
-    result = await model.ainvoke(
+    model = get_chat_model().with_structured_output(RoutePlan)
+    raw = await model.ainvoke(
         [
-            ("system", ROUTER_SYSTEM_PROMPT),
+            ("system", PLANNER_SYSTEM_PROMPT),
             ("human", state["query"]),
         ]
     )
+    plan = finalize_plan(raw if isinstance(raw, RoutePlan) else RoutePlan.model_validate(raw))
 
-    router_ms = round((time.perf_counter() - started) * 1000, 2)
+    primary: AgentRoute = plan.routes[0]
+    tool_read_only = plan.requires_synthesis and "tool" in plan.routes
+    planner_ms = round((time.perf_counter() - started) * 1000, 2)
 
     return {
-        "route": result.route,
+        "route": primary,
+        "planned_routes": plan.routes,
+        "requires_synthesis": plan.requires_synthesis,
+        "may_require_write": plan.may_require_write,
+        "tool_read_only": tool_read_only,
         **node_trace(
-            "router",
-            route=result.route,
-            timing={"router_ms": router_ms},
+            "planner",
+            route=primary,
+            selected_capabilities=[r for r in plan.routes if r in READ_ROUTES],
+            timing={"planner_ms": planner_ms, "router_ms": planner_ms},
         ),
     }
+
+
+# Backward-compatible alias for older imports/evals.
+router_node = planner_node
+
+__all__ = [
+    "RoutePlan",
+    "READ_ROUTES",
+    "normalize_planned_routes",
+    "finalize_plan",
+    "planner_node",
+    "router_node",
+    "ReadCapability",
+]

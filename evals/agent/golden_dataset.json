@@ -145,5 +145,75 @@
     "question": "Order replacement parts from an external supplier.",
     "expected_route": "unsupported",
     "expected_approval": false
+  },
+
+  {
+    "id": "composite_rag_sql_01",
+    "question": "What does AX-4317 mean, and how many maintenance records does MACHINE-42 have?",
+    "expected_route": "knowledge",
+    "expected_routes": ["knowledge", "sql"],
+    "expected_approval": false,
+    "required_facts": ["AX-4317", "MACHINE-42"]
+  },
+  {
+    "id": "composite_rag_sql_02",
+    "question": "Explain the maintenance policy for emergency repairs and list open high-priority tickets.",
+    "expected_route": "knowledge",
+    "expected_routes": ["knowledge", "sql"],
+    "expected_approval": false
+  },
+  {
+    "id": "composite_rag_mcp_01",
+    "question": "What does E-100 mean and what is MACHINE-42's current operational status?",
+    "expected_route": "knowledge",
+    "expected_routes": ["knowledge", "tool"],
+    "expected_approval": false,
+    "required_facts": ["E-100", "MACHINE-42"]
+  },
+  {
+    "id": "composite_rag_mcp_02",
+    "question": "What procedure should be followed for AX-4317 and what is the current status of MACHINE-42?",
+    "expected_route": "knowledge",
+    "expected_routes": ["knowledge", "tool"],
+    "expected_approval": false
+  },
+  {
+    "id": "composite_sql_mcp_01",
+    "question": "Show MACHINE-42 maintenance history and its current operational status.",
+    "expected_route": "sql",
+    "expected_routes": ["sql", "tool"],
+    "expected_approval": false
+  },
+  {
+    "id": "composite_all_01",
+    "question": "What does E-100 mean, has MACHINE-42 had related maintenance issues before, and what is its current operational status?",
+    "expected_route": "knowledge",
+    "expected_routes": ["knowledge", "sql", "tool"],
+    "expected_approval": false,
+    "required_facts": ["E-100", "MACHINE-42"]
+  },
+  {
+    "id": "composite_all_02",
+    "question": "Using documentation, SQL history, and live status for MACHINE-42, summarize the AX-4317 situation.",
+    "expected_route": "knowledge",
+    "expected_routes": ["knowledge", "sql", "tool"],
+    "expected_approval": false
+  },
+  {
+    "id": "composite_hitl_01",
+    "question": "Based on MACHINE-42's current condition, maintenance history, and the relevant procedure, create a high-priority maintenance ticket if intervention is required.",
+    "expected_route": "knowledge",
+    "expected_routes": ["knowledge", "sql", "tool"],
+    "expected_approval": true,
+    "expected_may_require_write": true
+  },
+  {
+    "id": "composite_tenant_isolation_01",
+    "question": "What does E-100 mean and what is MACHINE-42's current status?",
+    "expected_route": "knowledge",
+    "expected_routes": ["knowledge", "tool"],
+    "expected_approval": false,
+    "tenant_slug": "atlas-manufacturing",
+    "notes": "Same question shape as Borealis must not leak cold-chain meanings when evaluated per-tenant."
   }
 ]

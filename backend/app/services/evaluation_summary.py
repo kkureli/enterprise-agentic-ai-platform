@@ -10,6 +10,13 @@ class AgentEvaluationSummary(BaseModel):
     approval_accuracy: float
     execution_success_rate: float
     end_to_end_pass_rate: float
+    required_capability_recall: float | None = None
+    exact_capability_set_accuracy: float | None = None
+    unnecessary_capability_rate: float | None = None
+    per_capability_execution_success: float | None = None
+    synthesis_required_fact_coverage: float | None = None
+    tenant_correctness: float | None = None
+    composite_cases: int | None = None
 
 
 class RetrievalStrategyMetrics(BaseModel):
@@ -44,6 +51,22 @@ class SystemComponentStatus(BaseModel):
 class SystemStatusResponse(BaseModel):
     overall: str
     components: list[SystemComponentStatus]
+
+
+_AGENT_SUMMARY_KEYS = {
+    "total_cases",
+    "route_accuracy",
+    "approval_accuracy",
+    "execution_success_rate",
+    "end_to_end_pass_rate",
+    "required_capability_recall",
+    "exact_capability_set_accuracy",
+    "unnecessary_capability_rate",
+    "per_capability_execution_success",
+    "synthesis_required_fact_coverage",
+    "tenant_correctness",
+    "composite_cases",
+}
 
 
 def load_evaluation_summary() -> DemoEvaluationsResponse:
@@ -82,16 +105,7 @@ def load_evaluation_summary() -> DemoEvaluationsResponse:
         }
 
     agent_payload = {
-        key: value
-        for key, value in raw["agent"].items()
-        if key
-        in {
-            "total_cases",
-            "route_accuracy",
-            "approval_accuracy",
-            "execution_success_rate",
-            "end_to_end_pass_rate",
-        }
+        key: value for key, value in raw["agent"].items() if key in _AGENT_SUMMARY_KEYS
     }
 
     strategies_raw = raw["retrieval"]["strategies"]

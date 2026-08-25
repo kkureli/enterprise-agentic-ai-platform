@@ -1,23 +1,100 @@
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import Send
 
 from app.agents.approval_node import approval_node
 from app.agents.approved_action_node import approved_action_node
 from app.agents.mcp_tool_node import mcp_tool_node
 from app.agents.rag_node import rag_node
-from app.agents.router import router_node
+from app.agents.router import planner_node
 from app.agents.sql_node import sql_node
 from app.agents.state import AgentRoute, AgentState
+from app.agents.synthesis_node import synthesis_node
+from app.agents.write_gate_node import write_gate_node
 
 
-def route_after_router(state: AgentState) -> AgentRoute:
-    return state["route"]
+def _planned_routes(state: AgentState) -> list[AgentRoute]:
+    routes = list(state.get("planned_routes") or [])
+    if routes:
+        return routes
+    route = state.get("route")
+    return [route] if route else ["unsupported"]
+
+
+def route_after_planner(state: AgentState) -> str | list[Send]:
+    """Single-route fast path or LangGraph fan-out via Send."""
+
+    routes = _planned_routes(state)
+    mapping = {
+        "knowledge": "rag",
+        "sql": "sql",
+        "tool": "tool",
+    }
+
+    if not routes or routes == ["unsupported"] or routes[0] == "unsupported":
+        return "fallback"
+
+    if len(routes) == 1:
+        return mapping[routes[0]]
+
+    return [Send(mapping[route], state) for route in routes if route in mapping]
+
+
+def after_capability(state: AgentState) -> str:
+    if state.get("requires_synthesis"):
+        return "synthesize"
+    return "finalize"
+
+
+def route_after_tool(state: AgentState) -> str:
+    if state.get("requires_approval"):
+        return "approval"
+    if state.get("requires_synthesis"):
+        return "synthesize"
+    return "finalize"
+
+
+def route_after_approval(state: AgentState) -> str:
+    if state.get("approval_granted"):
+        return "approved_action"
+    return "finalize"
+
+
+def after_synthesize(state: AgentState) -> str:
+    if state.get("may_require_write"):
+        return "write_gate"
+    return "finalize"
+
+
+def after_write_gate(state: AgentState) -> str:
+    if state.get("requires_approval"):
+        return "approval"
+    return "finalize"
 
 
 def finalize_node(state: AgentState) -> dict:
     from app.agents.execution_trace import node_trace
 
-    route = state["route"]
+    # Explicit reject/approve outcomes from HITL take precedence over synthesis.
+    if state.get("approval_granted") is False and state.get("tool_answer"):
+        return {
+            "final_answer": state["tool_answer"],
+            **node_trace("finalize"),
+        }
+
+    if state.get("action_result") and state.get("tool_answer"):
+        return {
+            "final_answer": state["tool_answer"],
+            **node_trace("finalize"),
+        }
+
+    if state.get("synthesis_answer"):
+        return {
+            "final_answer": state["synthesis_answer"],
+            **node_trace("finalize"),
+        }
+
+    route = state.get("route") or (_planned_routes(state) or ["unsupported"])[0]
 
     if route == "knowledge":
         return {
@@ -52,48 +129,65 @@ def fallback_node(state: AgentState) -> dict:
     }
 
 
-def route_after_tool(state: AgentState) -> str:
-    if state.get("requires_approval"):
-        return "approval"
-
-    return "finalize"
-
-
-def route_after_approval(state: AgentState) -> str:
-    if state.get("approval_granted"):
-        return "approved_action"
-
-    return "finalize"
-
-
 def build_agent_graph():
     graph_builder = StateGraph(AgentState)
 
-    graph_builder.add_node("router", router_node)
+    graph_builder.add_node("planner", planner_node)
     graph_builder.add_node("rag", rag_node)
+    graph_builder.add_node("sql", sql_node)
+    graph_builder.add_node("tool", mcp_tool_node)
+    graph_builder.add_node("synthesize", synthesis_node)
+    graph_builder.add_node("write_gate", write_gate_node)
     graph_builder.add_node("finalize", finalize_node)
     graph_builder.add_node("fallback", fallback_node)
-    graph_builder.add_node("tool", mcp_tool_node)
-    graph_builder.add_node("sql", sql_node)
     graph_builder.add_node("approval", approval_node)
     graph_builder.add_node("approved_action", approved_action_node)
 
-    graph_builder.add_edge(START, "router")
+    graph_builder.add_edge(START, "planner")
 
     graph_builder.add_conditional_edges(
-        "router",
-        route_after_router,
+        "planner",
+        route_after_planner,
+        ["rag", "sql", "tool", "fallback"],
+    )
+
+    graph_builder.add_conditional_edges(
+        "rag",
+        after_capability,
         {
-            "knowledge": "rag",
-            "tool": "tool",
-            "sql": "sql",
-            "unsupported": "fallback",
+            "synthesize": "synthesize",
+            "finalize": "finalize",
+        },
+    )
+    graph_builder.add_conditional_edges(
+        "sql",
+        after_capability,
+        {
+            "synthesize": "synthesize",
+            "finalize": "finalize",
+        },
+    )
+    graph_builder.add_conditional_edges(
+        "tool",
+        route_after_tool,
+        {
+            "approval": "approval",
+            "synthesize": "synthesize",
+            "finalize": "finalize",
         },
     )
 
     graph_builder.add_conditional_edges(
-        "tool",
-        route_after_tool,
+        "synthesize",
+        after_synthesize,
+        {
+            "write_gate": "write_gate",
+            "finalize": "finalize",
+        },
+    )
+    graph_builder.add_conditional_edges(
+        "write_gate",
+        after_write_gate,
         {
             "approval": "approval",
             "finalize": "finalize",
@@ -108,15 +202,7 @@ def build_agent_graph():
             "finalize": "finalize",
         },
     )
-
-    graph_builder.add_edge(
-        "approved_action",
-        "finalize",
-    )
-
-    graph_builder.add_edge("rag", "finalize")
-    graph_builder.add_edge("sql", "finalize")
-
+    graph_builder.add_edge("approved_action", "finalize")
     graph_builder.add_edge("finalize", END)
     graph_builder.add_edge("fallback", END)
 

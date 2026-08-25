@@ -1,23 +1,38 @@
 {
-  "total_cases": 24,
+  "total_cases": 33,
   "metrics": {
     "route_accuracy": 1.0,
     "approval_accuracy": 1.0,
     "execution_success_rate": 1.0,
-    "end_to_end_pass_rate": 1.0
+    "end_to_end_pass_rate": 1.0,
+    "required_capability_recall": 1.0,
+    "exact_capability_set_accuracy": 1.0,
+    "unnecessary_capability_rate": 0.0,
+    "per_capability_execution_success": 1.0,
+    "synthesis_required_fact_coverage": 1.0,
+    "tenant_correctness": 1.0,
+    "composite_cases": 9
   },
   "results": [
     {
       "id": "knowledge_01",
       "question": "What does error code AX-4317 mean?",
       "expected_route": "knowledge",
+      "expected_routes": [
+        "knowledge"
+      ],
       "actual_route": "knowledge",
+      "actual_routes": [
+        "knowledge"
+      ],
       "expected_approval": false,
       "actual_approval": false,
       "answer": "Error code AX-4317 means hydraulic pressure loss. Technicians must inspect the hydraulic circuit and pressure sensor before restarting the machine.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -25,13 +40,21 @@
       "id": "knowledge_02",
       "question": "What procedure should be followed for AX-4317?",
       "expected_route": "knowledge",
+      "expected_routes": [
+        "knowledge"
+      ],
       "actual_route": "knowledge",
+      "actual_routes": [
+        "knowledge"
+      ],
       "expected_approval": false,
       "actual_approval": false,
       "answer": "For error code AX-4317, which indicates hydraulic pressure loss, technicians should inspect the hydraulic circuit and pressure sensor before restarting the machine.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -39,13 +62,21 @@
       "id": "knowledge_03",
       "question": "What does the maintenance policy say about emergency repairs?",
       "expected_route": "knowledge",
+      "expected_routes": [
+        "knowledge"
+      ],
       "actual_route": "knowledge",
+      "actual_routes": [
+        "knowledge"
+      ],
       "expected_approval": false,
       "actual_approval": false,
       "answer": "The provided documents do not contain information about emergency repairs in the maintenance policy.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -53,13 +84,21 @@
       "id": "knowledge_04",
       "question": "Explain the network password policy.",
       "expected_route": "knowledge",
+      "expected_routes": [
+        "knowledge"
+      ],
       "actual_route": "knowledge",
+      "actual_routes": [
+        "knowledge"
+      ],
       "expected_approval": false,
       "actual_approval": false,
       "answer": "The network password policy requires that corporate authentication credentials meet password complexity requirements and must never be shared. Users should update compromised passwords immediately. This policy applies to account security but does not define remote VPN access requirements.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -67,13 +106,21 @@
       "id": "knowledge_05",
       "question": "According to the maintenance documentation, how should hydraulic pressure loss be handled?",
       "expected_route": "knowledge",
+      "expected_routes": [
+        "knowledge"
+      ],
       "actual_route": "knowledge",
+      "actual_routes": [
+        "knowledge"
+      ],
       "expected_approval": false,
       "actual_approval": false,
       "answer": "Hydraulic pressure loss, indicated by error code AX-4317, should be handled by inspecting the hydraulic circuit and pressure sensor before restarting the machine.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -81,13 +128,21 @@
       "id": "knowledge_06",
       "question": "What are the documented troubleshooting steps for equipment pressure errors?",
       "expected_route": "knowledge",
+      "expected_routes": [
+        "knowledge"
+      ],
       "actual_route": "knowledge",
+      "actual_routes": [
+        "knowledge"
+      ],
       "expected_approval": false,
       "actual_approval": false,
       "answer": "For equipment pressure errors, specifically error code AX-4317 indicating hydraulic pressure loss, technicians should inspect the hydraulic circuit and pressure sensor before restarting the machine.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -95,13 +150,21 @@
       "id": "sql_01",
       "question": "How many maintenance records does MACHINE-42 have?",
       "expected_route": "sql",
+      "expected_routes": [
+        "sql"
+      ],
       "actual_route": "sql",
+      "actual_routes": [
+        "sql"
+      ],
       "expected_approval": false,
       "actual_approval": false,
       "answer": "MACHINE-42 has 2 maintenance records.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -109,13 +172,21 @@
       "id": "sql_02",
       "question": "Show the maintenance history for MACHINE-42.",
       "expected_route": "sql",
+      "expected_routes": [
+        "sql"
+      ],
       "actual_route": "sql",
+      "actual_routes": [
+        "sql"
+      ],
       "expected_approval": false,
       "actual_approval": false,
-      "answer": "The maintenance history for MACHINE-42 includes:\n\n1. On 2026-08-10, an inspection was performed by Technician A, focusing on the hydraulic pressure sensor.\n2. On 2026-08-18, corrective maintenance was done by Technician B, involving checking and adjusting the hydraulic fluid level.",
+      "answer": "The maintenance history for MACHINE-42 includes:\n\n- On 2026-08-10, an inspection was performed where the hydraulic pressure sensor was inspected by Technician A.\n- On 2026-08-18, corrective maintenance was done involving checking and adjusting the hydraulic fluid level by Technician B.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -123,13 +194,21 @@
       "id": "sql_03",
       "question": "Which assets are currently in warning state?",
       "expected_route": "sql",
+      "expected_routes": [
+        "sql"
+      ],
       "actual_route": "sql",
+      "actual_routes": [
+        "sql"
+      ],
       "expected_approval": false,
       "actual_approval": false,
-      "answer": "The asset currently in warning state is \"Hydraulic Press 42\" (asset code: MACHINE-42) located at Assembly Line 2, with active error code AX-4317.",
+      "answer": "The asset currently in warning state is \"Hydraulic Press 42\" (asset code: MACHINE-42) located at Assembly Line 2.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -137,13 +216,21 @@
       "id": "sql_04",
       "question": "How many open high-priority maintenance tickets are there?",
       "expected_route": "sql",
+      "expected_routes": [
+        "sql"
+      ],
       "actual_route": "sql",
+      "actual_routes": [
+        "sql"
+      ],
       "expected_approval": false,
       "actual_approval": false,
-      "answer": "There are 6 open high-priority maintenance tickets.",
+      "answer": "There are 9 open high-priority maintenance tickets.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -151,13 +238,21 @@
       "id": "sql_05",
       "question": "List all open maintenance tickets for MACHINE-42.",
       "expected_route": "sql",
+      "expected_routes": [
+        "sql"
+      ],
       "actual_route": "sql",
+      "actual_routes": [
+        "sql"
+      ],
       "expected_approval": false,
       "actual_approval": false,
-      "answer": "There are six open maintenance tickets for MACHINE-42:\n\n1. Issue: Hydraulic pressure loss, Priority: high, Created at: 2026-08-23 23:02:29\n2. Issue: Pressure sensor requires inspection, Priority: medium, Created at: 2026-08-23 23:02:29\n3. Issue: Hydraulic pressure requires investigation, Priority: high, Created at: 2026-08-24 12:11:58\n4. Issue: Approved hydraulic pressure inspection, Priority: high, Created at: 2026-08-24 15:50:06\n5. Issue: Hydraulic pressure loss, Priority: high, Created at: 2026-08-24 16:15:31\n6. Issue: Hydraulic pressure loss, Priority: high, Created at: 2026-08-24 17:44:25",
+      "answer": "There are nine open maintenance tickets for MACHINE-42. Most issues relate to hydraulic pressure loss or inspection, with high priority except one medium priority ticket for pressure sensor inspection. All tickets are currently open.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -165,13 +260,21 @@
       "id": "sql_06",
       "question": "Which assets have had corrective maintenance?",
       "expected_route": "sql",
+      "expected_routes": [
+        "sql"
+      ],
       "actual_route": "sql",
+      "actual_routes": [
+        "sql"
+      ],
       "expected_approval": false,
       "actual_approval": false,
       "answer": "The assets that have had corrective maintenance are:\n\n1. Hydraulic Press 42 (Asset Code: MACHINE-42) located at Assembly Line 2, currently with status \"warning\".\n2. Welding Robot 07 (Asset Code: ROBOT-07) located at Assembly Line 3, currently with status \"maintenance\".",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -179,13 +282,21 @@
       "id": "tool_01",
       "question": "Get the current operational status of MACHINE-42.",
       "expected_route": "tool",
+      "expected_routes": [
+        "tool"
+      ],
       "actual_route": "tool",
+      "actual_routes": [
+        "tool"
+      ],
       "expected_approval": false,
       "actual_approval": false,
-      "answer": "The current operational status of MACHINE-42 is \"warning.\" It is located at Assembly Line 2 and has an active error code AX-4317. Would you like me to provide more details or take any action?",
+      "answer": "The current operational status of MACHINE-42 is unknown. There is no available information on its location or any active error codes.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -193,13 +304,21 @@
       "id": "tool_02",
       "question": "Check the current status of MACHINE-17.",
       "expected_route": "tool",
+      "expected_routes": [
+        "tool"
+      ],
       "actual_route": "tool",
+      "actual_routes": [
+        "tool"
+      ],
       "expected_approval": false,
       "actual_approval": false,
-      "answer": "The current status of MACHINE-17 is operational. It is located at Assembly Line 1 and there are no active error codes.",
+      "answer": "The current status of MACHINE-17 is unknown. There is no available information on its location or any active error codes.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -207,13 +326,21 @@
       "id": "tool_03",
       "question": "Create a high-priority maintenance ticket for MACHINE-42 because of hydraulic pressure loss.",
       "expected_route": "tool",
+      "expected_routes": [
+        "tool"
+      ],
       "actual_route": "tool",
+      "actual_routes": [
+        "tool"
+      ],
       "expected_approval": true,
       "actual_approval": true,
       "answer": "This action requires human approval before execution.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -221,13 +348,21 @@
       "id": "tool_04",
       "question": "Open a low-priority maintenance ticket for MACHINE-17 for routine lubrication.",
       "expected_route": "tool",
+      "expected_routes": [
+        "tool"
+      ],
       "actual_route": "tool",
+      "actual_routes": [
+        "tool"
+      ],
       "expected_approval": true,
       "actual_approval": true,
       "answer": "This action requires human approval before execution.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -235,13 +370,21 @@
       "id": "tool_05",
       "question": "Create a maintenance ticket for ROBOT-07 because the welding arm requires calibration.",
       "expected_route": "tool",
+      "expected_routes": [
+        "tool"
+      ],
       "actual_route": "tool",
+      "actual_routes": [
+        "tool"
+      ],
       "expected_approval": true,
       "actual_approval": true,
       "answer": "This action requires human approval before execution.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -249,13 +392,21 @@
       "id": "tool_06",
       "question": "Use the enterprise system to create a ticket for MACHINE-42.",
       "expected_route": "tool",
+      "expected_routes": [
+        "tool"
+      ],
       "actual_route": "tool",
+      "actual_routes": [
+        "tool"
+      ],
       "expected_approval": true,
       "actual_approval": true,
       "answer": "This action requires human approval before execution.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -263,13 +414,21 @@
       "id": "unsupported_01",
       "question": "What is the weather in Istanbul?",
       "expected_route": "unsupported",
+      "expected_routes": [
+        "unsupported"
+      ],
       "actual_route": "unsupported",
+      "actual_routes": [
+        "unsupported"
+      ],
       "expected_approval": false,
       "actual_approval": false,
       "answer": "This request is not supported yet.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -277,13 +436,21 @@
       "id": "unsupported_02",
       "question": "Book me a flight to London.",
       "expected_route": "unsupported",
+      "expected_routes": [
+        "unsupported"
+      ],
       "actual_route": "unsupported",
+      "actual_routes": [
+        "unsupported"
+      ],
       "expected_approval": false,
       "actual_approval": false,
       "answer": "This request is not supported yet.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -291,13 +458,21 @@
       "id": "unsupported_03",
       "question": "What is the current Bitcoin price?",
       "expected_route": "unsupported",
+      "expected_routes": [
+        "unsupported"
+      ],
       "actual_route": "unsupported",
+      "actual_routes": [
+        "unsupported"
+      ],
       "expected_approval": false,
       "actual_approval": false,
       "answer": "This request is not supported yet.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -305,13 +480,21 @@
       "id": "unsupported_04",
       "question": "Send an email to the maintenance manager.",
       "expected_route": "unsupported",
+      "expected_routes": [
+        "unsupported"
+      ],
       "actual_route": "unsupported",
+      "actual_routes": [
+        "unsupported"
+      ],
       "expected_approval": false,
       "actual_approval": false,
       "answer": "This request is not supported yet.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -319,13 +502,21 @@
       "id": "unsupported_05",
       "question": "Tell me who won yesterday's football match.",
       "expected_route": "unsupported",
+      "expected_routes": [
+        "unsupported"
+      ],
       "actual_route": "unsupported",
+      "actual_routes": [
+        "unsupported"
+      ],
       "expected_approval": false,
       "actual_approval": false,
       "answer": "This request is not supported yet.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     },
@@ -333,13 +524,243 @@
       "id": "unsupported_06",
       "question": "Order replacement parts from an external supplier.",
       "expected_route": "unsupported",
+      "expected_routes": [
+        "unsupported"
+      ],
       "actual_route": "unsupported",
+      "actual_routes": [
+        "unsupported"
+      ],
       "expected_approval": false,
       "actual_approval": false,
       "answer": "This request is not supported yet.",
       "route_passed": true,
       "approval_passed": true,
       "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
+      "passed": true,
+      "error": null
+    },
+    {
+      "id": "composite_rag_sql_01",
+      "question": "What does AX-4317 mean, and how many maintenance records does MACHINE-42 have?",
+      "expected_route": "knowledge",
+      "expected_routes": [
+        "knowledge",
+        "sql"
+      ],
+      "actual_route": "knowledge",
+      "actual_routes": [
+        "knowledge",
+        "sql"
+      ],
+      "expected_approval": false,
+      "actual_approval": false,
+      "answer": "AX-4317 is an equipment error code indicating hydraulic pressure loss, requiring technicians to inspect the hydraulic circuit and pressure sensor before restarting the machine. MACHINE-42, which is a Hydraulic Press 42, currently has 2 maintenance records.",
+      "route_passed": true,
+      "approval_passed": true,
+      "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
+      "passed": true,
+      "error": null
+    },
+    {
+      "id": "composite_rag_sql_02",
+      "question": "Explain the maintenance policy for emergency repairs and list open high-priority tickets.",
+      "expected_route": "knowledge",
+      "expected_routes": [
+        "knowledge",
+        "sql"
+      ],
+      "actual_route": "knowledge",
+      "actual_routes": [
+        "knowledge",
+        "sql"
+      ],
+      "expected_approval": false,
+      "actual_approval": false,
+      "answer": "The maintenance policy for emergency repairs prioritizes addressing high-priority issues promptly to ensure critical problems are resolved quickly. Currently, the open high-priority tickets include multiple instances of \"Hydraulic pressure loss\" and related hydraulic pressure issues on asset MACHINE-42 (Hydraulic Press 42), as well as a \"Welding arm calibration fault\" on ROBOT-07 (Welding Robot 07). These tickets highlight urgent attention needed for hydraulic press problems and welding robot calibration faults.",
+      "route_passed": true,
+      "approval_passed": true,
+      "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
+      "passed": true,
+      "error": null
+    },
+    {
+      "id": "composite_rag_mcp_01",
+      "question": "What does E-100 mean and what is MACHINE-42's current operational status?",
+      "expected_route": "knowledge",
+      "expected_routes": [
+        "knowledge",
+        "tool"
+      ],
+      "actual_route": "knowledge",
+      "actual_routes": [
+        "knowledge",
+        "tool"
+      ],
+      "expected_approval": false,
+      "actual_approval": false,
+      "answer": "The meaning of the error code E-100 is not defined in the provided information. Additionally, the current operational status of MACHINE-42 is unknown, with no active error code or location data available.",
+      "route_passed": true,
+      "approval_passed": true,
+      "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
+      "passed": true,
+      "error": null
+    },
+    {
+      "id": "composite_rag_mcp_02",
+      "question": "What procedure should be followed for AX-4317 and what is the current status of MACHINE-42?",
+      "expected_route": "knowledge",
+      "expected_routes": [
+        "knowledge",
+        "tool"
+      ],
+      "actual_route": "knowledge",
+      "actual_routes": [
+        "knowledge",
+        "tool"
+      ],
+      "expected_approval": false,
+      "actual_approval": false,
+      "answer": "For error code AX-4317, the procedure is to inspect the hydraulic circuit and pressure sensor before restarting the machine, as it indicates hydraulic pressure loss. The current status of MACHINE-42 is unknown, with no available information on its location or active error codes.",
+      "route_passed": true,
+      "approval_passed": true,
+      "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
+      "passed": true,
+      "error": null
+    },
+    {
+      "id": "composite_sql_mcp_01",
+      "question": "Show MACHINE-42 maintenance history and its current operational status.",
+      "expected_route": "sql",
+      "expected_routes": [
+        "sql",
+        "tool"
+      ],
+      "actual_route": "sql",
+      "actual_routes": [
+        "sql",
+        "tool"
+      ],
+      "expected_approval": false,
+      "actual_approval": false,
+      "answer": "According to the SQL evidence, MACHINE-42 is currently in a \"warning\" status. Its recent maintenance history includes a corrective maintenance on 2026-08-18 where the hydraulic fluid level was checked and adjusted by Technician B, and an inspection on 2026-08-10 where the hydraulic pressure sensor was inspected by Technician A. However, the MCP live tool evidence indicates that maintenance history and current operational status information is not available, showing a discrepancy. Based on the SQL data, the machine's status is \"warning\" with recent maintenance activities recorded.",
+      "route_passed": true,
+      "approval_passed": true,
+      "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
+      "passed": true,
+      "error": null
+    },
+    {
+      "id": "composite_all_01",
+      "question": "What does E-100 mean, has MACHINE-42 had related maintenance issues before, and what is its current operational status?",
+      "expected_route": "knowledge",
+      "expected_routes": [
+        "knowledge",
+        "sql",
+        "tool"
+      ],
+      "actual_route": "knowledge",
+      "actual_routes": [
+        "knowledge",
+        "sql",
+        "tool"
+      ],
+      "expected_approval": false,
+      "actual_approval": false,
+      "answer": "The term \"E-100\" is not defined in the available information. MACHINE-42 has no recorded maintenance issues related to this error code, and its current operational status is not provided in the data.",
+      "route_passed": true,
+      "approval_passed": true,
+      "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
+      "passed": true,
+      "error": null
+    },
+    {
+      "id": "composite_all_02",
+      "question": "Using documentation, SQL history, and live status for MACHINE-42, summarize the AX-4317 situation.",
+      "expected_route": "knowledge",
+      "expected_routes": [
+        "knowledge",
+        "sql",
+        "tool"
+      ],
+      "actual_route": "knowledge",
+      "actual_routes": [
+        "knowledge",
+        "sql",
+        "tool"
+      ],
+      "expected_approval": false,
+      "actual_approval": false,
+      "answer": "The AX-4317 error code on MACHINE-42 indicates a hydraulic pressure loss, requiring inspection of the hydraulic circuit and pressure sensor before restarting. Preventive maintenance every 500 operating hours is recommended to prevent such issues. However, no specific data or live status information is available for AX-4317 in the documentation, SQL history, or current machine status, so a detailed summary of the situation cannot be provided.",
+      "route_passed": true,
+      "approval_passed": true,
+      "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
+      "passed": true,
+      "error": null
+    },
+    {
+      "id": "composite_hitl_01",
+      "question": "Based on MACHINE-42's current condition, maintenance history, and the relevant procedure, create a high-priority maintenance ticket if intervention is required.",
+      "expected_route": "knowledge",
+      "expected_routes": [
+        "knowledge",
+        "sql",
+        "tool"
+      ],
+      "actual_route": "knowledge",
+      "actual_routes": [
+        "knowledge",
+        "sql",
+        "tool"
+      ],
+      "expected_approval": true,
+      "actual_approval": true,
+      "answer": "This action requires human approval before execution.",
+      "route_passed": true,
+      "approval_passed": true,
+      "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
+      "passed": true,
+      "error": null
+    },
+    {
+      "id": "composite_tenant_isolation_01",
+      "question": "What does E-100 mean and what is MACHINE-42's current status?",
+      "expected_route": "knowledge",
+      "expected_routes": [
+        "knowledge",
+        "tool"
+      ],
+      "actual_route": "knowledge",
+      "actual_routes": [
+        "knowledge",
+        "tool"
+      ],
+      "expected_approval": false,
+      "actual_approval": false,
+      "answer": "E-100 means \"Lubrication pressure below safe operating threshold,\" requiring inspection of the lubrication pump, oil level, pressure sensor, and supply lines, and the equipment must not resume production until pressure is stable. MACHINE-42's current status is \"warning,\" it is located at Assembly Line 2, and it has an active error code \"AX-4317.\"",
+      "route_passed": true,
+      "approval_passed": true,
+      "answer_present": true,
+      "required_capability_recall": 1.0,
+      "exact_capability_set": true,
       "passed": true,
       "error": null
     }

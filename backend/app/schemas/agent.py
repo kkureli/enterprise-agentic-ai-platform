@@ -27,6 +27,8 @@ class AgentResponse(BaseModel):
         "approval_required",
     ]
     route: AgentRoute
+    planned_routes: list[AgentRoute] | None = None
+    requires_synthesis: bool | None = None
     answer: str
     pending_action: dict[str, Any] | None = None
     execution_details: ExecutionDetails | None = None

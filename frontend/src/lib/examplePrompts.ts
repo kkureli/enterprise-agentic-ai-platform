@@ -31,6 +31,12 @@ const PROMPTS_BY_TENANT: Record<string, ExamplePrompt[]> = {
       prompt:
         'Create a high-priority maintenance ticket for MACHINE-42 because of hydraulic pressure loss.',
     },
+    {
+      category: 'Composite / Synthesis',
+      label: 'E-100 · MACHINE-42 · next action',
+      prompt:
+        "What does E-100 mean, review MACHINE-42's maintenance history and current operational status, then recommend the next action.",
+    },
   ],
   'Borealis Cold Chain': [
     { category: 'Knowledge / RAG', label: 'CL-209', prompt: 'What does CL-209 mean?' },
@@ -56,6 +62,12 @@ const PROMPTS_BY_TENANT: Record<string, ExamplePrompt[]> = {
       prompt:
         'Create a high-priority maintenance ticket for CHILLER-12 because of low refrigerant suction pressure.',
     },
+    {
+      category: 'Composite / Synthesis',
+      label: 'CL-209 · CHILLER-12 · next action',
+      prompt:
+        "What does CL-209 mean, review CHILLER-12's maintenance history and current operational status, then recommend the next action.",
+    },
   ],
   'Helios Energy Services': [
     { category: 'Knowledge / RAG', label: 'WT-302', prompt: 'What does WT-302 mean?' },
@@ -80,6 +92,12 @@ const PROMPTS_BY_TENANT: Record<string, ExamplePrompt[]> = {
       label: 'Create TURBINE-08 ticket',
       prompt:
         'Create a high-priority maintenance ticket for TURBINE-08 because of yaw motor overload.',
+    },
+    {
+      category: 'Composite / Synthesis',
+      label: 'WT-302 · TURBINE-08 · next action',
+      prompt:
+        "What does WT-302 mean, review TURBINE-08's maintenance history and current operational status, then recommend the next action.",
     },
   ],
 }

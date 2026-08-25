@@ -30,15 +30,17 @@ export const RAG_PIPELINE_NODES: RagPipelineNode[] = [
   },
   {
     id: 'agent-router',
-    name: 'Agent Router',
-    shortLabel: 'Router',
-    purpose: 'Classifies the request into knowledge, SQL, tool (MCP), or unsupported.',
-    implementation: 'LangGraph router node using a structured LLM route decision.',
-    input: 'User query',
-    output: 'Route: knowledge | sql | tool | unsupported',
+    name: 'Planner',
+    shortLabel: 'Planner',
+    purpose:
+      'Selective capability planner for the agent graph. For knowledge questions it selects the RAG capability (alone or as part of a composite plan).',
+    implementation:
+      'LangGraph planner node with structured RoutePlan (planned_routes, requires_synthesis, may_require_write).',
+    input: 'User query + tenant context',
+    output: 'One or more capabilities; knowledge route continues into the RAG pipeline below',
     usedIn: 'both',
-    tenantIsolation: 'Routing is tenant-aware via graph state; knowledge route enters RAG.',
-    performance: 'Adds one router LLM call before retrieval.',
+    tenantIsolation: 'Tenant context is attached before planning; RAG retrieval remains tenant-scoped.',
+    performance: 'Adds one planner LLM call before retrieval on knowledge paths.',
     tech: 'LangGraph · Azure OpenAI',
   },
   {

@@ -13,11 +13,14 @@ deployment runbook [`phase-8b-runbook.md`](phase-8b-runbook.md).
 | IN PROGRESS | Partially done / remaining work listed |
 | PLANNED | Not started or not yet productionized |
 
-**Current progress:** Sprints 0–8 COMPLETE · Sprints 9–11 PLANNED
+**Current progress:** Sprints 0–8 COMPLETE · Multi-Capability Orchestration COMPLETE
 
-**Next focus (post–Sprint 8):** (1) demo video / screenshots / portfolio polish,
-(2) Sprint 9 multimodal later, (3) Sprint 10 portfolio/evidence polish as
-appropriate, (4) Sprint 11 repository/code-review intelligence agent.
+**Main platform status: FEATURE FREEZE**
+
+**Next focus:** maintenance, demo/evidence polish, bug fixes, and operational
+monitoring. Multimodal work is **not** on the active roadmap. A Code Review /
+repository intelligence agent would be a **separate project / repository**, not
+another feature of this platform.
 
 ---
 
@@ -62,7 +65,8 @@ adds multi-query expansion/fusion.
 
 **Status: COMPLETE**
 
-- Router graph: `knowledge` / `sql` / `tool` / `unsupported`
+- Planner graph: selective `knowledge` / `sql` / `tool` / `unsupported`
+  (single-capability fast path; historical Sprint 3 started as exclusive routing)
 - RAG node, finalize, fallback
 - Agent API with thread-aware execution
 
@@ -96,7 +100,7 @@ Demo/simulated tool data — not a live CMMS/ERP.
 **Status: COMPLETE**
 
 - Langfuse tracing for LangGraph / nested LLM calls
-- 24-case agent golden dataset + evaluation runners
+- Agent golden dataset + evaluation runners (expanded to 33 cases with composite)
 - Persisted agent and retrieval evaluation results
 
 ---
@@ -136,7 +140,7 @@ packaging, demo tenants, cost controls, and full backend CI/CD.
 - Compare Runs (Standard vs Advanced)
 - Evaluation (persisted regression metrics)
 - System Status (safe readiness view)
-- Architecture / RAG Pipeline Explorer
+- Architecture / RAG Pipeline Explorer / orchestration explorer
 - Public-demo cost controls (`PUBLIC_DEMO_MODE`, layered Redis limits, daily
   fail-closed budget, prompt length, compare/write limits)
 - Frontend/backend performance optimization (client request cache, lazy routes,
@@ -193,39 +197,55 @@ OIDC federated credential uses GitHub’s **immutable** subject
 
 ---
 
+# Multi-Capability Orchestration
+
+**Status: COMPLETE**
+
+Verified live agent regression (curated dataset; not universal production accuracy):
+
+- 33/33 cases · 9 composite
+- route / approval / execution / end-to-end pass: 100%
+- required capability recall / exact capability-set accuracy: 100%
+- unnecessary capability rate: 0%
+- per-capability execution success / synthesis fact coverage / tenant correctness: 100%
+
+Delivered:
+
+- Structured `RoutePlan` planner (`planned_routes`, `requires_synthesis`,
+  `may_require_write`)
+- Single-capability fast path preserved
+- Parallel read fan-out (RAG / SQL / MCP read-only) with grounded synthesis
+- Optional write gate + HITL for allowlisted writes
+- Playground Composite / Synthesis examples + Evaluation composite metrics
+
+---
+
 # Sprint 9 — Multimodal Manufacturing Use Case
 
-**Status: PLANNED (later; do not start until portfolio polish priority allows)**
+**Status: DEFERRED (not on the active roadmap)**
 
-Examples only — do not treat as committed scope:
-
-- Equipment / manual image understanding
-- Visual maintenance evidence
-- Multimodal retrieval grounded in tenant knowledge
+Not part of FEATURE FREEZE follow-up work. Kept only as a historical/optional
+idea — do not treat as committed scope.
 
 ---
 
 # Sprint 10 — Portfolio Polish & Evidence
 
-**Status: PLANNED (near-term after Sprint 8 close — demo video / screenshots first)**
+**Status: PLANNED (maintenance / demo evidence only under FEATURE FREEZE)**
 
-- Screenshots and short demo video
-- Architecture diagrams / RAG explorer evidence
+- Screenshots and short demo video refresh when UI changes warrant it
+- Architecture / orchestration explorer evidence
 - Benchmark evidence presentation
-- CV / interview project bullets
 - Documentation polish
 
 ---
 
 # Sprint 11 — AI Code Review / Repository Intelligence Agent
 
-**Status: PLANNED (optional future project)**
+**Status: SEPARATE PROJECT (not this platform)**
 
-Examples only:
-
-- Repository indexing and diff-aware analysis
-- GitHub/GitLab review integrations
-- Structured review comments and evaluation
+Would live in a **separate repository / product**, not as another feature of the
+Enterprise Agentic AI Platform.
 
 ---
 

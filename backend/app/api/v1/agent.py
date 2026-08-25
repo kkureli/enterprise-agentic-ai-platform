@@ -15,6 +15,7 @@ from app.agents.execution_trace import (
 )
 from app.agents.graph import agent_graph
 from app.api.v1.limits import raise_limit_error
+from app.core.demo_tenants import demo_tenant_slug_for_name
 from app.db.session import get_db
 from app.models.tenant import Tenant
 from app.schemas.agent import (
@@ -42,6 +43,14 @@ router = APIRouter(
 )
 
 
+def _tenant_slug_for(tenant: Tenant) -> str:
+    slug = demo_tenant_slug_for_name(tenant.name)
+    if slug:
+        return slug
+    # Non-demo tenants still require an explicit slug for MCP isolation.
+    return f"tenant-{tenant.id}"
+
+
 def _response_from_result(
     *,
     thread_id: str,
@@ -49,6 +58,7 @@ def _response_from_result(
     usage: TokenUsageCallback,
     total_ms: float,
 ) -> AgentResponse:
+    planned = result.get("planned_routes")
     details = build_execution_details(
         result.get("execution_details"),
         route=result.get("route"),
@@ -56,6 +66,8 @@ def _response_from_result(
         total_ms=total_ms,
         observability_id=thread_id,
     )
+    if planned and not details.selected_capabilities:
+        details.selected_capabilities = [route for route in planned if route != "unsupported"]
 
     interrupts = result.get("__interrupt__")
 
@@ -64,6 +76,8 @@ def _response_from_result(
             thread_id=thread_id,
             status="approval_required",
             route=result["route"],
+            planned_routes=planned,
+            requires_synthesis=result.get("requires_synthesis"),
             answer=result["tool_answer"],
             pending_action=result["pending_action"],
             execution_details=details,
@@ -73,6 +87,8 @@ def _response_from_result(
         thread_id=thread_id,
         status="completed",
         route=result["route"],
+        planned_routes=planned,
+        requires_synthesis=result.get("requires_synthesis"),
         answer=result["final_answer"],
         execution_details=details,
     )
@@ -108,6 +124,7 @@ async def _enforce_ai_request_limits(
 async def _invoke_agent(
     *,
     tenant_id: UUID,
+    tenant_slug: str,
     question: str,
     retrieval_mode: str,
     run_name: str,
@@ -127,6 +144,7 @@ async def _invoke_agent(
         "metadata": {
             "thread_id": thread_id,
             "tenant_id": str(tenant_id),
+            "tenant_slug": tenant_slug,
             "retrieval_mode": retrieval_mode,
         },
     }
@@ -137,6 +155,7 @@ async def _invoke_agent(
         result = await agent_graph.ainvoke(
             {
                 "tenant_id": tenant_id,
+                "tenant_slug": tenant_slug,
                 "query": question,
                 "retrieval_mode": retrieval_mode,
             },
@@ -188,6 +207,7 @@ async def run_agent(
 
     return await _invoke_agent(
         tenant_id=tenant_id,
+        tenant_slug=_tenant_slug_for(tenant),
         question=payload.question,
         retrieval_mode=payload.retrieval_mode,
         run_name="enterprise-agent",
@@ -222,12 +242,14 @@ async def compare_agent_runs(
 
     standard = await _invoke_agent(
         tenant_id=tenant_id,
+        tenant_slug=_tenant_slug_for(tenant),
         question=payload.question,
         retrieval_mode="standard",
         run_name="enterprise-agent-compare-standard",
     )
     advanced = await _invoke_agent(
         tenant_id=tenant_id,
+        tenant_slug=_tenant_slug_for(tenant),
         question=payload.question,
         retrieval_mode="advanced",
         run_name="enterprise-agent-compare-advanced",

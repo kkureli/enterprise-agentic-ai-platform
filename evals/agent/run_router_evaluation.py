@@ -1,9 +1,10 @@
+"""Router/planner evaluation — supports single-route and composite expected sets."""
+
 import asyncio
 import json
 from pathlib import Path
-from uuid import uuid4
 
-from app.agents.router import router_node
+from app.agents.router import planner_node
 
 DATASET_PATH = Path(__file__).with_name("golden_dataset.json")
 
@@ -13,59 +14,46 @@ def load_dataset() -> list[dict]:
         return json.load(file)
 
 
+def expected_routes_for(case: dict) -> list[str]:
+    if "expected_routes" in case:
+        return list(case["expected_routes"])
+    return [case["expected_route"]]
+
+
 async def evaluate_router() -> None:
     dataset = load_dataset()
-
-    correct = 0
-    results = []
+    passed_count = 0
+    failures: list[dict] = []
 
     for case in dataset:
-        result = await router_node(
+        result = await planner_node(
             {
-                "tenant_id": uuid4(),
                 "query": case["question"],
-                "retrieval_mode": "standard",
+                "tenant_id": None,  # type: ignore[typeddict-item]
             }
         )
-
-        actual_route = result["route"]
-        expected_route = case["expected_route"]
-        passed = actual_route == expected_route
-
-        if passed:
-            correct += 1
-
-        results.append(
-            {
-                "id": case["id"],
-                "question": case["question"],
-                "expected_route": expected_route,
-                "actual_route": actual_route,
-                "passed": passed,
-            }
-        )
-
+        actual_routes = list(result.get("planned_routes") or [result["route"]])
+        expected_routes = expected_routes_for(case)
+        passed = actual_routes == expected_routes
+        passed_count += int(passed)
         symbol = "✅" if passed else "❌"
-
-        print(f"{symbol} {case['id']}: expected={expected_route} actual={actual_route}")
+        print(f"{symbol} {case['id']}: expected={expected_routes} actual={actual_routes}")
+        if not passed:
+            failures.append(
+                {
+                    "id": case["id"],
+                    "expected_routes": expected_routes,
+                    "actual_routes": actual_routes,
+                }
+            )
 
     total = len(dataset)
-    accuracy = correct / total if total else 0
-
-    print()
-    print(f"Correct: {correct}/{total}")
-    print(f"Router Accuracy: {accuracy:.2%}")
-
-    failures = [result for result in results if not result["passed"]]
-
+    print(f"\nPlanner accuracy: {passed_count}/{total} ({passed_count / total if total else 0:.2%})")
     if failures:
-        print("\nFailures:")
-
+        print("Failures:")
         for failure in failures:
             print(
-                f"- {failure['id']}: "
-                f"{failure['expected_route']} -> "
-                f"{failure['actual_route']}"
+                f"  {failure['id']}: {failure['expected_routes']} -> {failure['actual_routes']}"
             )
 
 
