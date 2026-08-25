@@ -91,7 +91,7 @@ The React playground includes:
 - **Compare Runs** — same question with Standard vs Advanced retrieval
 - **Evaluation** — persisted regression metrics
 - **System Status** — safe readiness view (no secrets/URLs)
-- **Architecture** — system topology (local working tree also includes a detailed RAG Pipeline Explorer pending commit/deploy)
+- **Architecture** — system topology and RAG Pipeline Explorer
 
 Tenant selector loads demo tenants from `GET /api/v1/demo/tenants`. The public
 UI does **not** expose unrestricted document upload.
@@ -464,23 +464,23 @@ subject (`repo:owner@OWNER_ID/repo@REPO_ID:environment:production`).
 | Area | Status |
 |------|--------|
 | Sprints 0–7 | Complete |
-| Sprint 8 cloud hosting | Largely complete (ACA, SWA, Neon, Qdrant Cloud, Upstash, Postgres checkpoints, playground) |
-| Backend GHCR publish | Complete (via CD image job / optional manual image workflow) |
-| Backend ACA auto-deploy | **COMPLETE** |
-| Latest local frontend UX polish | Implemented in working tree; not claimed live until commit + SWA deploy |
+| Sprint 8 — Azure Deployment, Public Playground & Production Hardening | **COMPLETE** |
+| Backend Full CD | **COMPLETE** (validate → GHCR SHA → OIDC → ACA → `/health` → `/ready`) |
+| Cloud hosting | ACA · SWA · Neon · Qdrant Cloud · Upstash · Postgres checkpoints · public playground |
 
-Feature scope for the core platform is largely sufficient. Near-term priority
-is docs/demo polish and evidence — backend Full CD is already live.
+Core platform feature scope and Sprint 8 deployment hardening are complete.
+Near-term priority is demo video / screenshots / portfolio polish — not new
+sprint implementation.
 
 ---
 
 ## Roadmap
 
-1. Portfolio polish / evidence (Backend Full CD already complete)
-2. Commit/deploy latest playground UX polish + smoke test production
-3. Portfolio evidence (screenshots, short demo video, CV bullets)
-4. Optional: Azure Blob durable document storage
-5. Future: multimodal manufacturing demo; AI code-review agent (see project plan)
+1. Demo video / screenshots / portfolio polish (first)
+2. Sprint 9 multimodal manufacturing use case (later)
+3. Sprint 10 portfolio / evidence polish as appropriate
+4. Sprint 11 repository / code-review intelligence agent
+5. Optional: Azure Blob durable document storage
 
 ---
 

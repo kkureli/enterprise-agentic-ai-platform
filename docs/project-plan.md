@@ -13,13 +13,11 @@ deployment runbook [`phase-8b-runbook.md`](phase-8b-runbook.md).
 | IN PROGRESS | Partially done / remaining work listed |
 | PLANNED | Not started or not yet productionized |
 
-**Current progress:** Sprints 0–7 COMPLETE · Sprint 8 IN PROGRESS (cloud
-playground largely live; backend ACA CD + final polish remaining) ·
-Sprints 9–11 PLANNED
+**Current progress:** Sprints 0–8 COMPLETE · Sprints 9–11 PLANNED
 
-**Priority shift:** core platform feature scope is largely sufficient. Focus on
-(1) deployment reliability, (2) backend full CD automation, (3) architecture /
-docs polish, (4) demo evidence, (5) only then optional new AI use cases.
+**Next focus (post–Sprint 8):** (1) demo video / screenshots / portfolio polish,
+(2) Sprint 9 multimodal later, (3) Sprint 10 portfolio/evidence polish as
+appropriate, (4) Sprint 11 repository/code-review intelligence agent.
 
 ---
 
@@ -119,84 +117,85 @@ Architecture).
 
 # Sprint 8 — Azure Deployment, Public Playground & Production Hardening
 
-**Status: IN PROGRESS**
+**Status: COMPLETE**
 
-**Goal:** low-cost cloud playground with production-oriented packaging, demo
-tenants, cost controls, and CI/CD.
+**Goal achieved:** low-cost public cloud playground with production-oriented
+packaging, demo tenants, cost controls, and full backend CI/CD.
 
-## COMPLETE — packaging & runtime
+## Final accomplishments
+
+- Azure Container Apps (backend; `minReplicas=0`, `maxReplicas=1`)
+- Azure Static Web Apps (frontend)
+- Neon PostgreSQL (app data)
+- Qdrant Cloud (vectors)
+- Upstash Redis (RAG cache + rate / demo budget guards)
+- Persistent LangGraph PostgreSQL checkpoints (`CHECKPOINT_BACKEND=postgres`,
+  same Neon `DATABASE_URL`)
+- Public multi-tenant playground (Atlas / Borealis / Helios demo tenants)
+- Execution Trace / AI Inspector
+- Compare Runs (Standard vs Advanced)
+- Evaluation (persisted regression metrics)
+- System Status (safe readiness view)
+- Architecture / RAG Pipeline Explorer
+- Public-demo cost controls (`PUBLIC_DEMO_MODE`, layered Redis limits, daily
+  fail-closed budget, prompt length, compare/write limits)
+- Frontend/backend performance optimization (client request cache, lazy routes,
+  backend cold-start / readiness parallelism)
+- GHCR immutable images (`:sha-<full-git-sha>` + `latest`)
+- GitHub Actions full backend CD (`.github/workflows/backend-cd.yml`)
+- Azure OIDC with no long-lived deployment secret (GitHub Environment
+  `production`; immutable subject form)
+
+## First production Backend CD run (verified end-to-end)
+
+```text
+validate
+  → immutable GHCR SHA image
+  → GitHub OIDC
+  → Azure Container Apps revision
+  → /health
+  → /ready
+```
+
+OIDC federated credential uses GitHub’s **immutable** subject
+(`repo:owner@OWNER_ID/repo@REPO_ID:environment:production`); see
+`scripts/setup-azure-github-oidc.sh` and `docs/phase-8b-runbook.md`.
+
+## Packaging & runtime (also delivered)
 
 - Backend production Dockerfile (repo-root context, MCP included, CPU-only torch)
 - Health/readiness probes; Redis soft dependency for ordinary cache/rate features
 - Env split: `.env.development` / `.env.production` + explicit `uv run --env-file`
-- `CHECKPOINT_BACKEND=memory|postgres` (Postgres = same `DATABASE_URL` / Neon)
 - Qdrant API key + Upstash `rediss://` support
-- GHCR image publish workflow (`latest` + immutable SHA tags)
-- CI: Ruff lint/format, pytest (~56 tests), Docker build validation
-- Azure Static Web Apps deploy workflow for the frontend
+- CI: Ruff lint/format, pytest, Docker build validation
+- Ad-hoc GHCR publish: `backend-image.yml` (`workflow_dispatch` only)
 
-## COMPLETE — cloud hosting & data plane (provisioned / in use)
+## Cloud hosting & data plane
 
 | Layer | Current |
 |-------|---------|
 | Frontend | Azure Static Web Apps |
-| Backend | Azure Container Apps (`minReplicas=0`, `maxReplicas=1`) |
+| Backend | Azure Container Apps |
 | PostgreSQL | Neon (app data + LangGraph checkpoints) |
 | Vectors | Qdrant Cloud |
-| Redis | Upstash (RAG cache + rate / demo budget guards) |
+| Redis | Upstash |
 | LLM / embeddings | Azure OpenAI / Azure AI Foundry |
 | Observability | Langfuse |
 | Registry | GitHub Container Registry (GHCR) |
 
-## COMPLETE — playground & demo product surface
+## Known limitations (accepted; not Sprint 8 blockers)
 
-- Three demo tenants: Atlas Manufacturing, Borealis Cold Chain, Helios Energy Services
-- Seed script `scripts/seed_demo_playground.py` + demo APIs
-- E-100 tenant-isolation demo (live retrieval, not frontend hardcoding)
-- Playground pages: Playground, Documents, Operations, Compare Runs, Evaluation,
-  System Status, Architecture
-- Execution Trace / AI Inspector (curated operational metadata only)
-- Standard vs Advanced Compare Runs
-- Public-demo cost controls (`PUBLIC_DEMO_MODE`, layered Redis limits, daily
-  fail-closed budget, prompt length, compare/write limits)
-
-## IN PROGRESS / remaining Sprint 8 work
-
-| Item | Status |
-|------|--------|
-| Backend full CD: GHCR → Azure OIDC → Container Apps revision | **COMPLETE** (first production run: validate → GHCR → OIDC → ACA → /health → /ready) |
-| Commit + SWA deploy of latest local frontend UX polish (cold-start tenant loading states, retrieval-mode education, Architecture RAG Pipeline Explorer) | PENDING (present in local working tree; not claimed live) |
-| Final production smoke test after frontend polish lands | PENDING |
-| README / architecture / runbook accuracy pass | IN PROGRESS |
-| Durable document object storage (Azure Blob) | PLANNED (optional) |
-| JWT / RBAC public product layer | OUT OF SCOPE for Sprint 8 (future) |
-
-**Important CI/CD truth**
-
-- Frontend: push/PR workflows can deploy Static Web Apps
-- Backend CD workflow (`.github/workflows/backend-cd.yml`):
-  validate → GHCR `:sha-<git-sha>` → Azure OIDC → ACA image update → smoke tests
-- Backend Full CD is **COMPLETE** after a successful production run
-- OIDC federated credential must use GitHub’s **immutable** subject
-  (`repo:owner@OWNER_ID/repo@REPO_ID:environment:production`); see
-  `scripts/setup-azure-github-oidc.sh` and `docs/phase-8b-runbook.md`
-- Ad-hoc GHCR publish: `backend-image.yml` (`workflow_dispatch` only)
-
-## Known Sprint 8 limitations (still true)
-
-- Seeded synthetic enterprise data
-- MCP demo/simulated tools
-- Local/container filesystem document storage (not Blob)
-- ACA cold starts from `minReplicas=0` (accepted cost tradeoff; no keep-alive)
-- Playground warm navigation uses client-side request caching; Architecture /
-  Evaluation / Status do not wait on tenant APIs
+- Seeded synthetic enterprise data; MCP demo/simulated tools
+- Local/container filesystem document storage (Azure Blob optional later)
+- ACA cold starts from `minReplicas=0` (accepted cost tradeoff)
 - Cost controls reduce risk; they do not guarantee zero spend
+- JWT / RBAC public product layer remains out of scope (future)
 
 ---
 
 # Sprint 9 — Multimodal Manufacturing Use Case
 
-**Status: PLANNED (optional)**
+**Status: PLANNED (later; do not start until portfolio polish priority allows)**
 
 Examples only — do not treat as committed scope:
 
@@ -208,7 +207,7 @@ Examples only — do not treat as committed scope:
 
 # Sprint 10 — Portfolio Polish & Evidence
 
-**Status: PLANNED / partially overlapping Sprint 8 polish**
+**Status: PLANNED (near-term after Sprint 8 close — demo video / screenshots first)**
 
 - Screenshots and short demo video
 - Architecture diagrams / RAG explorer evidence
