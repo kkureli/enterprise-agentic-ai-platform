@@ -1,47 +1,34 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { fetchSystemStatus, type SystemStatus } from '../api/demo'
+import { EmptyBlock, ErrorBlock, LoadingBlock } from '../components/AsyncState'
+import { StatusBadge } from '../components/StatusBadge'
+
+type LoadStatus = 'loading' | 'success' | 'error'
 
 export function SystemStatusPage() {
   const [data, setData] = useState<SystemStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState<LoadStatus>('loading')
 
-  useEffect(() => {
-    let cancelled = false
+  const load = useCallback(async () => {
+    setStatus('loading')
+    setError(null)
 
-    async function load() {
-      setLoading(true)
-      setError(null)
-      try {
-        const payload = await fetchSystemStatus()
-        if (!cancelled) {
-          setData(payload)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load system status.')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void load()
-    return () => {
-      cancelled = true
+    try {
+      const payload = await fetchSystemStatus()
+      setData(payload)
+      setStatus('success')
+    } catch (err) {
+      setData(null)
+      setStatus('error')
+      setError(err instanceof Error ? err.message : 'Failed to load system status.')
     }
   }, [])
 
-  if (loading) {
-    return <p className="page-note">Checking system status…</p>
-  }
-
-  if (error || !data) {
-    return <p className="page-error">{error ?? 'System status unavailable.'}</p>
-  }
+  useEffect(() => {
+    void load()
+  }, [load])
 
   return (
     <div className="status-page">
@@ -52,23 +39,45 @@ export function SystemStatusPage() {
         </p>
       </header>
 
-      <p className="status-overall">
-        Overall: <strong>{data.overall}</strong>
-      </p>
+      {status === 'loading' ? (
+        <LoadingBlock
+          title="Checking system status…"
+          subtitle="Cloud demo may take a few seconds after being idle."
+          compact
+        />
+      ) : null}
 
-      <div className="status-grid">
-        {data.components.map((component) => (
-          <article key={component.name} className="status-card">
-            <div className="status-card__header">
-              <h3>{component.name}</h3>
-              <span className={`status-badge status-badge--${component.status.toLowerCase()}`}>
-                {component.status}
-              </span>
+      {status === 'error' ? (
+        <ErrorBlock
+          title="Unable to load system status."
+          message={error}
+          onRetry={() => void load()}
+        />
+      ) : null}
+
+      {status === 'success' && data ? (
+        <>
+          <p className="status-overall">
+            Overall: <StatusBadge status={data.overall} />
+          </p>
+
+          {data.components.length === 0 ? (
+            <EmptyBlock title="No status components reported." />
+          ) : (
+            <div className="status-grid">
+              {data.components.map((component) => (
+                <article key={component.name} className="status-card">
+                  <div className="status-card__header">
+                    <h3>{component.name}</h3>
+                    <StatusBadge status={component.status} />
+                  </div>
+                  {component.role ? <p className="status-card__role">{component.role}</p> : null}
+                </article>
+              ))}
             </div>
-            {component.role ? <p className="status-card__role">{component.role}</p> : null}
-          </article>
-        ))}
-      </div>
+          )}
+        </>
+      ) : null}
     </div>
   )
 }

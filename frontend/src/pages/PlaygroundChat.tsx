@@ -50,7 +50,7 @@ export function PlaygroundChat({
 
       <div className="prompt-categories">
         {categories.map((category) => (
-          <div key={category} className="prompt-category">
+          <section key={category} className="prompt-category">
             <h3 className="prompt-category__title">{category}</h3>
             <div className="prompt-category__list">
               {prompts
@@ -61,45 +61,49 @@ export function PlaygroundChat({
                     type="button"
                     className="prompt-category__button"
                     disabled={isSending}
+                    title={item.prompt}
+                    aria-label={item.prompt}
                     onClick={() => onSelectPrompt(item.prompt)}
                   >
-                    {item.prompt}
+                    {item.label}
                   </button>
                 ))}
             </div>
-          </div>
+          </section>
         ))}
       </div>
 
-      <div className="chat-panel__messages">
-        {messages.length === 0 ? (
-          <div className="empty-state empty-state--compact">
-            <h2 className="empty-state__title">Ask the agent</h2>
-            <p className="empty-state__subtitle">
-              Use a suggested prompt or type your own question for {tenantName}. Answers come
-              from the live RAG, SQL, MCP, and HITL pipeline.
-            </p>
-          </div>
-        ) : (
-          messages.map((message) => (
-            <ChatMessageItem
-              key={message.id}
-              message={message}
-              onApprovalResolved={onApprovalResolved}
-            />
-          ))
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+      <div className="chat-panel">
+        <div className="chat-panel__messages" aria-busy={isSending}>
+          {messages.length === 0 ? (
+            <div className="empty-state empty-state--compact">
+              <h2 className="empty-state__title">Ask the agent</h2>
+              <p className="empty-state__subtitle">
+                Use a suggested prompt or type your own question for {tenantName}. Answers come
+                from the live RAG, SQL, MCP, and HITL pipeline.
+              </p>
+            </div>
+          ) : (
+            messages.map((message) => (
+              <ChatMessageItem
+                key={message.id}
+                message={message}
+                onApprovalResolved={onApprovalResolved}
+              />
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
 
-      <ChatComposer
-        value={input}
-        retrievalMode={retrievalMode}
-        disabled={isSending}
-        onChange={onInputChange}
-        onRetrievalModeChange={onRetrievalModeChange}
-        onSubmit={onSubmit}
-      />
+        <ChatComposer
+          value={input}
+          retrievalMode={retrievalMode}
+          disabled={isSending}
+          onChange={onInputChange}
+          onRetrievalModeChange={onRetrievalModeChange}
+          onSubmit={onSubmit}
+        />
+      </div>
     </div>
   )
 }

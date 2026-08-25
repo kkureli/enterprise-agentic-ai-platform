@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import {
   listAssets,
   listMaintenanceRecords,
   listMaintenanceTickets,
 } from '../api/playground'
+import { EmptyBlock, ErrorBlock, LoadingBlock } from '../components/AsyncState'
 import { StatusBadge } from '../components/StatusBadge'
 import type {
   Asset,
@@ -18,55 +19,48 @@ type OperationsPageProps = {
 }
 
 type OpsTab = 'assets' | 'history' | 'tickets'
+type LoadStatus = 'loading' | 'success' | 'error'
 
 export function OperationsPage({ tenantId, onAskAboutAsset }: OperationsPageProps) {
   const [tab, setTab] = useState<OpsTab>('assets')
   const [assets, setAssets] = useState<Asset[]>([])
   const [records, setRecords] = useState<MaintenanceRecord[]>([])
   const [tickets, setTickets] = useState<MaintenanceTicket[]>([])
-  const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState<LoadStatus>('loading')
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
+  const load = useCallback(async () => {
+    setStatus('loading')
+    setError(null)
 
-    async function load() {
-      setLoading(true)
-      setError(null)
+    try {
+      const [assetRows, recordRows, ticketRows] = await Promise.all([
+        listAssets(tenantId),
+        listMaintenanceRecords(tenantId),
+        listMaintenanceTickets(tenantId),
+      ])
 
-      try {
-        const [assetRows, recordRows, ticketRows] = await Promise.all([
-          listAssets(tenantId),
-          listMaintenanceRecords(tenantId),
-          listMaintenanceTickets(tenantId),
-        ])
-
-        if (!cancelled) {
-          setAssets(assetRows)
-          setRecords(recordRows)
-          setTickets(ticketRows)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load operations data.')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void load()
-
-    return () => {
-      cancelled = true
+      setAssets(assetRows)
+      setRecords(recordRows)
+      setTickets(ticketRows)
+      setStatus('success')
+    } catch (err) {
+      setAssets([])
+      setRecords([])
+      setTickets([])
+      setStatus('error')
+      setError(err instanceof Error ? err.message : 'Failed to load operations data.')
     }
   }, [tenantId])
 
-  if (loading) {
-    return <p className="page-note">Loading operations data…</p>
-  }
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const emptyForTab =
+    (tab === 'assets' && assets.length === 0) ||
+    (tab === 'history' && records.length === 0) ||
+    (tab === 'tickets' && tickets.length === 0)
 
   return (
     <div className="operations-page">
@@ -78,126 +72,147 @@ export function OperationsPage({ tenantId, onAskAboutAsset }: OperationsPageProp
         </p>
       </header>
 
-      {error ? <p className="page-error">{error}</p> : null}
-
-      <div className="ops-tabs" role="tablist">
-        {(
-          [
-            ['assets', 'Assets'],
-            ['history', 'Maintenance History'],
-            ['tickets', 'Tickets'],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            className={tab === id ? 'ops-tabs__button ops-tabs__button--active' : 'ops-tabs__button'}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'assets' ? (
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Asset Code</th>
-                <th>Name</th>
-                <th>Location</th>
-                <th>Status</th>
-                <th>Active Error</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {assets.map((asset) => (
-                <tr key={asset.id}>
-                  <td>
-                    <code>{asset.asset_code}</code>
-                  </td>
-                  <td>{asset.name}</td>
-                  <td>{asset.location}</td>
-                  <td>
-                    <StatusBadge status={asset.status} />
-                  </td>
-                  <td>{asset.active_error_code ?? '—'}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="button button--secondary button--small"
-                      onClick={() => onAskAboutAsset(asset.asset_code)}
-                    >
-                      Ask AI
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {status === 'loading' ? (
+        <LoadingBlock title="Loading operations data…" compact />
       ) : null}
 
-      {tab === 'history' ? (
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Asset</th>
-                <th>Description</th>
-                <th>Date</th>
-                <th>Technician</th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((record) => (
-                <tr key={record.id}>
-                  <td>
-                    <code>{record.asset_code ?? '—'}</code>
-                  </td>
-                  <td>{record.description}</td>
-                  <td>{record.maintenance_date}</td>
-                  <td>{record.technician}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {status === 'error' ? (
+        <ErrorBlock
+          title="Unable to load operations data."
+          message={error}
+          onRetry={() => void load()}
+        />
       ) : null}
 
-      {tab === 'tickets' ? (
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Asset</th>
-                <th>Priority</th>
-                <th>Status</th>
-                <th>Issue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tickets.map((ticket) => (
-                <tr key={ticket.id}>
-                  <td>
-                    <code>{ticket.asset_code ?? '—'}</code>
-                  </td>
-                  <td>
-                    <StatusBadge status={ticket.priority} />
-                  </td>
-                  <td>
-                    <StatusBadge status={ticket.status} />
-                  </td>
-                  <td>{ticket.issue}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {status === 'success' ? (
+        <>
+          <div className="ops-tabs" role="tablist" aria-label="Operations tables">
+            {(
+              [
+                ['assets', 'Assets'],
+                ['history', 'Maintenance History'],
+                ['tickets', 'Tickets'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={tab === id}
+                className={
+                  tab === id ? 'ops-tabs__button ops-tabs__button--active' : 'ops-tabs__button'
+                }
+                onClick={() => setTab(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {emptyForTab ? (
+            <EmptyBlock title={`No ${tab === 'history' ? 'maintenance history' : tab} for this tenant.`} />
+          ) : null}
+
+          {tab === 'assets' && assets.length > 0 ? (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Asset Code</th>
+                    <th>Name</th>
+                    <th>Location</th>
+                    <th>Status</th>
+                    <th>Active Error</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {assets.map((asset) => (
+                    <tr key={asset.id}>
+                      <td>
+                        <code>{asset.asset_code}</code>
+                      </td>
+                      <td>{asset.name}</td>
+                      <td>{asset.location}</td>
+                      <td>
+                        <StatusBadge status={asset.status} />
+                      </td>
+                      <td>{asset.active_error_code ?? '—'}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="button button--secondary button--small"
+                          aria-label={`Ask AI about ${asset.asset_code}`}
+                          onClick={() => onAskAboutAsset(asset.asset_code)}
+                        >
+                          Ask AI
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+
+          {tab === 'history' && records.length > 0 ? (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Asset</th>
+                    <th>Description</th>
+                    <th>Date</th>
+                    <th>Technician</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {records.map((record) => (
+                    <tr key={record.id}>
+                      <td>
+                        <code>{record.asset_code ?? '—'}</code>
+                      </td>
+                      <td>{record.description}</td>
+                      <td>{record.maintenance_date}</td>
+                      <td>{record.technician}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+
+          {tab === 'tickets' && tickets.length > 0 ? (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Asset</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Issue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tickets.map((ticket) => (
+                    <tr key={ticket.id}>
+                      <td>
+                        <code>{ticket.asset_code ?? '—'}</code>
+                      </td>
+                      <td>
+                        <StatusBadge status={ticket.priority} />
+                      </td>
+                      <td>
+                        <StatusBadge status={ticket.status} />
+                      </td>
+                      <td>{ticket.issue}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </>
       ) : null}
     </div>
   )

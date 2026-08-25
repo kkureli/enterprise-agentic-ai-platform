@@ -7,7 +7,8 @@ import {
   setTenantId,
 } from './api/config'
 import { listDemoTenants } from './api/playground'
-import { Sidebar, TenantSelector } from './components/PlaygroundNav'
+import { EmptyBlock, ErrorBlock, LoadingBlock } from './components/AsyncState'
+import { Sidebar, TenantSelector, type TenantLoadStatus } from './components/PlaygroundNav'
 import { ArchitecturePage } from './pages/ArchitecturePage'
 import { CompareRunsPage } from './pages/CompareRunsPage'
 import { DocumentsPage } from './pages/DocumentsPage'
@@ -19,6 +20,8 @@ import type { AgentResponse, ChatMessage, ExecutionDetails, RetrievalMode } from
 import type { DemoTenant, PlaygroundPage } from './types/playground'
 
 const CLIENT_COOLDOWN_MS = 1500
+
+const TENANT_OPTIONAL_PAGES: PlaygroundPage[] = ['architecture', 'evaluation', 'status']
 
 function createId(): string {
   return crypto.randomUUID()
@@ -50,7 +53,7 @@ function loadingMessage(): ChatMessage {
 export default function App() {
   const [page, setPage] = useState<PlaygroundPage>('playground')
   const [tenants, setTenants] = useState<DemoTenant[]>([])
-  const [tenantsLoading, setTenantsLoading] = useState(true)
+  const [tenantStatus, setTenantStatus] = useState<TenantLoadStatus>('loading')
   const [tenantsError, setTenantsError] = useState<string | null>(null)
   const [selectedTenantId, setSelectedTenantId] = useState(getTenantId())
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -59,63 +62,55 @@ export default function App() {
   const [isSending, setIsSending] = useState(false)
   const [cooldownActive, setCooldownActive] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const tenantsLoadedRef = useRef(false)
   const sendingLockRef = useRef(false)
   const cooldownTimerRef = useRef<number | null>(null)
+  const loadGenerationRef = useRef(0)
 
   const aiBusy = isSending || cooldownActive
+  const needsTenant = !TENANT_OPTIONAL_PAGES.includes(page)
 
-  useEffect(() => {
-    if (tenantsLoadedRef.current) {
-      return
-    }
+  const loadTenants = useCallback(async () => {
+    const generation = ++loadGenerationRef.current
+    setTenantStatus('loading')
+    setTenantsError(null)
 
-    tenantsLoadedRef.current = true
-    let cancelled = false
+    try {
+      const demoTenants = await listDemoTenants()
 
-    async function loadTenants() {
-      setTenantsLoading(true)
-      setTenantsError(null)
-
-      try {
-        const demoTenants = await listDemoTenants()
-
-        if (cancelled) {
-          return
-        }
-
-        setTenants(demoTenants)
-
-        if (demoTenants.length === 0) {
-          setSelectedTenantId('')
-          return
-        }
-
-        const existing = demoTenants.find((tenant) => tenant.id === getTenantId())
-        const next = existing ?? demoTenants[0]
-
-        setSelectedTenantId(next.id)
-        setTenantId(next.id)
-        setStoredTenantName(next.name)
-      } catch (error) {
-        if (!cancelled) {
-          setTenantsError(
-            error instanceof Error ? error.message : 'Failed to load demo tenants.',
-          )
-        }
-      } finally {
-        if (!cancelled) {
-          setTenantsLoading(false)
-        }
+      if (generation !== loadGenerationRef.current) {
+        return
       }
-    }
 
-    void loadTenants()
+      setTenants(demoTenants)
+      setTenantStatus('success')
 
-    return () => {
-      cancelled = true
+      if (demoTenants.length === 0) {
+        setSelectedTenantId('')
+        return
+      }
+
+      const existing = demoTenants.find((tenant) => tenant.id === getTenantId())
+      const next = existing ?? demoTenants[0]
+
+      setSelectedTenantId(next.id)
+      setTenantId(next.id)
+      setStoredTenantName(next.name)
+    } catch (error) {
+      if (generation !== loadGenerationRef.current) {
+        return
+      }
+
+      setTenants([])
+      setTenantStatus('error')
+      setTenantsError(
+        error instanceof Error ? error.message : 'Unable to load demo tenants.',
+      )
     }
   }, [])
+
+  useEffect(() => {
+    void loadTenants()
+  }, [loadTenants])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -252,6 +247,83 @@ export default function App() {
     void sendQuestion(`What is the current operational status of ${assetCode}?`)
   }
 
+  function renderTenantGatedContent() {
+    if (tenantStatus === 'loading') {
+      return (
+        <LoadingBlock
+          title="Starting demo environment…"
+          subtitle="Loading demo tenants. Cloud demo may take a few seconds after being idle."
+        />
+      )
+    }
+
+    if (tenantStatus === 'error') {
+      return (
+        <ErrorBlock
+          title="Unable to load demo tenants."
+          message={tenantsError}
+          onRetry={() => void loadTenants()}
+          retrying={false}
+        />
+      )
+    }
+
+    if (tenants.length === 0) {
+      return (
+        <EmptyBlock
+          title="No demo tenants are available."
+          message="The public demo expects Atlas Manufacturing, Borealis Cold Chain, and Helios Energy Services."
+        />
+      )
+    }
+
+    if (!selectedTenant) {
+      return (
+        <EmptyBlock
+          title="No demo tenants are available."
+          message="Select a tenant from the header to continue."
+        />
+      )
+    }
+
+    if (page === 'playground') {
+      return (
+        <PlaygroundChat
+          tenantName={selectedTenant.name}
+          messages={messages}
+          input={input}
+          retrievalMode={retrievalMode}
+          isSending={aiBusy}
+          messagesEndRef={messagesEndRef}
+          onInputChange={setInput}
+          onRetrievalModeChange={setRetrievalMode}
+          onSubmit={() => sendQuestion(input)}
+          onSelectPrompt={(prompt) => sendQuestion(prompt)}
+          onApprovalResolved={handleApprovalResolved}
+        />
+      )
+    }
+
+    if (page === 'documents') {
+      return <DocumentsPage tenantId={selectedTenant.id} />
+    }
+
+    if (page === 'operations') {
+      return (
+        <OperationsPage
+          tenantId={selectedTenant.id}
+          onAskAboutAsset={handleAskAboutAsset}
+        />
+      )
+    }
+
+    if (page === 'compare') {
+      return <CompareRunsPage disabled={aiBusy} />
+    }
+
+    return null
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -260,9 +332,12 @@ export default function App() {
             EA
           </div>
           <div>
-            <h1 className="app-header__title">Enterprise Agentic AI Playground</h1>
+            <div className="app-header__title-row">
+              <h1 className="app-header__title">Enterprise Agentic AI Playground</h1>
+              <span className="live-badge">Live Demo</span>
+            </div>
             <p className="app-header__subtitle">
-              Explore multi-tenant RAG, SQL, MCP tools, and human approval
+              Multi-tenant RAG · SQL · MCP · HITL
             </p>
           </div>
         </div>
@@ -270,9 +345,10 @@ export default function App() {
         <TenantSelector
           tenants={tenants}
           selectedId={selectedTenantId}
-          loading={tenantsLoading}
+          status={tenantStatus}
           error={tenantsError}
           onChange={handleTenantChange}
+          onRetry={() => void loadTenants()}
         />
       </header>
 
@@ -280,52 +356,12 @@ export default function App() {
         <Sidebar page={page} onNavigate={setPage} />
 
         <main className="app-main">
-          {!selectedTenant && page !== 'architecture' && page !== 'evaluation' && page !== 'status' ? (
-            <div className="page-empty">
-              <h2>Demo tenants unavailable</h2>
-              <p>
-                Seed the playground tenants, then reload. The public demo only exposes Atlas
-                Manufacturing, Borealis Cold Chain, and Helios Energy Services.
-              </p>
-            </div>
-          ) : null}
-
-          {selectedTenant && page === 'playground' ? (
-            <PlaygroundChat
-              tenantName={selectedTenant.name}
-              messages={messages}
-              input={input}
-              retrievalMode={retrievalMode}
-              isSending={aiBusy}
-              messagesEndRef={messagesEndRef}
-              onInputChange={setInput}
-              onRetrievalModeChange={setRetrievalMode}
-              onSubmit={() => sendQuestion(input)}
-              onSelectPrompt={(prompt) => sendQuestion(prompt)}
-              onApprovalResolved={handleApprovalResolved}
-            />
-          ) : null}
-
-          {selectedTenant && page === 'documents' ? (
-            <DocumentsPage tenantId={selectedTenant.id} />
-          ) : null}
-
-          {selectedTenant && page === 'operations' ? (
-            <OperationsPage
-              tenantId={selectedTenant.id}
-              onAskAboutAsset={handleAskAboutAsset}
-            />
-          ) : null}
-
-          {selectedTenant && page === 'compare' ? (
-            <CompareRunsPage disabled={aiBusy} />
-          ) : null}
-
-          {page === 'evaluation' ? <EvaluationPage /> : null}
-
-          {page === 'status' ? <SystemStatusPage /> : null}
-
-          {page === 'architecture' ? <ArchitecturePage /> : null}
+          <div className="app-main__inner">
+            {needsTenant ? renderTenantGatedContent() : null}
+            {page === 'evaluation' ? <EvaluationPage /> : null}
+            {page === 'status' ? <SystemStatusPage /> : null}
+            {page === 'architecture' ? <ArchitecturePage onNavigate={setPage} /> : null}
+          </div>
         </main>
       </div>
     </div>

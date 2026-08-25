@@ -1,5 +1,7 @@
-import { useRef } from 'react'
+import { useRef, type KeyboardEvent } from 'react'
 
+import { RetrievalModeInfo } from './RetrievalModeInfo'
+import { helperForMode } from '../lib/retrievalModes'
 import type { RetrievalMode } from '../types/agent'
 
 type ChatComposerProps = {
@@ -21,7 +23,7 @@ export function ChatComposer({
 }: ChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
       if (!disabled && value.trim()) {
@@ -46,7 +48,15 @@ export function ChatComposer({
           <option value="standard">Standard</option>
           <option value="advanced">Advanced</option>
         </select>
+        <RetrievalModeInfo compact />
+        {disabled ? (
+          <span className="composer__status" aria-live="polite">
+            Running agent…
+          </span>
+        ) : null}
       </div>
+
+      <p className="composer__mode-helper">{helperForMode(retrievalMode)}</p>
 
       <div className="composer__input-row">
         <textarea
@@ -56,6 +66,7 @@ export function ChatComposer({
           placeholder="Ask about policies, operational data, asset status, or maintenance actions…"
           value={value}
           disabled={disabled}
+          aria-label="Message to the agent"
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={handleKeyDown}
         />
@@ -64,8 +75,9 @@ export function ChatComposer({
           className="button button--primary composer__send"
           disabled={disabled || !value.trim()}
           onClick={onSubmit}
+          aria-label={disabled ? 'Running agent' : 'Send message'}
         >
-          Send
+          {disabled ? 'Running…' : 'Send'}
         </button>
       </div>
       <p className="composer__hint">Enter to send · Shift+Enter for newline</p>

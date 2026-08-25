@@ -2,7 +2,7 @@ import { ApprovalCard } from './ApprovalCard'
 import { DetailsPanel } from './DetailsPanel'
 import { ExecutionTrace } from './ExecutionTrace'
 import { RouteBadge } from './RouteBadge'
-import type { ChatMessage } from '../types/agent'
+import type { ChatMessage, ExecutionDetails } from '../types/agent'
 
 type ChatMessageProps = {
   message: ChatMessage
@@ -10,7 +10,7 @@ type ChatMessageProps = {
     messageId: string,
     approved: boolean,
     answer: string,
-    executionDetails?: import('../types/agent').ExecutionDetails | null,
+    executionDetails?: ExecutionDetails | null,
   ) => void
 }
 
@@ -27,11 +27,11 @@ export function ChatMessageItem({ message, onApprovalResolved }: ChatMessageProp
 
       <div className={`chat-message__bubble ${message.error ? 'chat-message__bubble--error' : ''}`}>
         {message.isLoading ? (
-          <span className="chat-message__loading">
+          <span className="chat-message__loading" aria-live="polite">
             <span className="chat-message__dot" />
             <span className="chat-message__dot" />
             <span className="chat-message__dot" />
-            Thinking…
+            Running agent…
           </span>
         ) : (
           <p className="chat-message__text">{message.content}</p>

@@ -2,53 +2,133 @@ import { useRef, useState } from 'react'
 
 import { compareAgentRuns } from '../api/demo'
 import { PlaygroundApiError } from '../api/playground'
+import { LoadingBlock } from '../components/AsyncState'
 import { ExecutionTrace } from '../components/ExecutionTrace'
+import { RetrievalPipelineInline } from '../components/RetrievalModeInfo'
+import {
+  ADVANCED_SUMMARY,
+  RETRIEVAL_TRADEOFF_NOTE,
+  STANDARD_SUMMARY,
+} from '../lib/retrievalModes'
 import type { AgentResponse, ExecutionDetails } from '../types/agent'
 
 type CompareRunsPageProps = {
   disabled?: boolean
 }
 
-function metric(label: string, left?: string | number | null, right?: string | number | null) {
-  const leftText = left == null || left === '' ? '—' : String(left)
-  const rightText = right == null || right === '' ? '—' : String(right)
-  const different = leftText !== rightText
-
-  return (
-    <tr className={different ? 'compare-table__row--diff' : undefined}>
-      <th>{label}</th>
-      <td>{leftText}</td>
-      <td>{rightText}</td>
-    </tr>
-  )
+type ObservedMetric = {
+  label: string
+  left: string
+  right: string
 }
 
-function summarize(response: AgentResponse) {
-  const details: ExecutionDetails | null | undefined = response.execution_details
-  return {
-    answer: response.answer,
-    route: response.route,
-    mode: details?.retrieval?.retrieval_mode ?? '—',
-    strategy: details?.retrieval?.strategy ?? '—',
-    candidates: details?.retrieval?.candidate_count ?? '—',
-    finalChunks: details?.retrieval?.final_chunk_count ?? '—',
-    reranker: details?.retrieval?.reranker_enabled == null
-      ? '—'
-      : details.retrieval.reranker_enabled
-        ? 'enabled'
-        : 'disabled',
-    cache: details?.cache ? (details.cache.cache_hit ? 'HIT' : 'MISS') : '—',
-    latency: details?.timing?.total_ms != null ? `${details.timing.total_ms} ms` : '—',
-    llmCalls: details?.llm_usage?.llm_call_count ?? '—',
-    inputTokens: details?.llm_usage?.input_tokens ?? '—',
-    outputTokens: details?.llm_usage?.output_tokens ?? '—',
-    totalTokens: details?.llm_usage?.total_tokens ?? '—',
-    cost:
-      details?.cost?.estimated_total_cost_usd != null
-        ? `$${details.cost.estimated_total_cost_usd.toFixed(6)}`
-        : '—',
-    sources: details?.sources ?? details?.retrieval?.context_chunks ?? [],
+function formatMs(value?: number | null): string | null {
+  if (value == null) {
+    return null
   }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(2)} s`
+  }
+  return `${Math.round(value)} ms`
+}
+
+function formatCost(value?: number | null): string | null {
+  if (value == null) {
+    return null
+  }
+  return `$${value.toFixed(6)}`
+}
+
+function formatTokens(value?: number | null): string | null {
+  if (value == null) {
+    return null
+  }
+  return value.toLocaleString()
+}
+
+function buildObservedMetrics(
+  standard: AgentResponse,
+  advanced: AgentResponse,
+): ObservedMetric[] {
+  const left = standard.execution_details
+  const right = advanced.execution_details
+  const rows: ObservedMetric[] = []
+
+  const leftLatency = formatMs(left?.timing?.total_ms)
+  const rightLatency = formatMs(right?.timing?.total_ms)
+  if (leftLatency != null || rightLatency != null) {
+    rows.push({
+      label: 'Latency',
+      left: leftLatency ?? '—',
+      right: rightLatency ?? '—',
+    })
+  }
+
+  const leftCandidates = left?.retrieval?.candidate_count
+  const rightCandidates = right?.retrieval?.candidate_count
+  if (leftCandidates != null || rightCandidates != null) {
+    rows.push({
+      label: 'Candidates',
+      left: leftCandidates != null ? String(leftCandidates) : '—',
+      right: rightCandidates != null ? String(rightCandidates) : '—',
+    })
+  }
+
+  const leftRerank = left?.retrieval?.reranker_enabled
+  const rightRerank = right?.retrieval?.reranker_enabled
+  if (leftRerank != null || rightRerank != null) {
+    rows.push({
+      label: 'Reranker',
+      left: leftRerank == null ? '—' : leftRerank ? 'Yes' : 'No',
+      right: rightRerank == null ? '—' : rightRerank ? 'Yes' : 'No',
+    })
+  }
+
+  const leftRewrites = left?.retrieval?.query_rewrites?.length
+  const rightRewrites = right?.retrieval?.query_rewrites?.length
+  if (leftRewrites != null || rightRewrites != null) {
+    rows.push({
+      label: 'Query rewrites',
+      left: leftRewrites != null ? String(leftRewrites) : '0',
+      right: rightRewrites != null ? String(rightRewrites) : '0',
+    })
+  }
+
+  const leftSources = (left?.sources ?? left?.retrieval?.context_chunks)?.length
+  const rightSources = (right?.sources ?? right?.retrieval?.context_chunks)?.length
+  if (leftSources != null || rightSources != null) {
+    rows.push({
+      label: 'Sources',
+      left: leftSources != null ? String(leftSources) : '—',
+      right: rightSources != null ? String(rightSources) : '—',
+    })
+  }
+
+  const leftTokens = formatTokens(left?.llm_usage?.total_tokens)
+  const rightTokens = formatTokens(right?.llm_usage?.total_tokens)
+  if (leftTokens != null || rightTokens != null) {
+    rows.push({
+      label: 'Tokens',
+      left: leftTokens ?? '—',
+      right: rightTokens ?? '—',
+    })
+  }
+
+  const leftCost = formatCost(left?.cost?.estimated_total_cost_usd)
+  const rightCost = formatCost(right?.cost?.estimated_total_cost_usd)
+  if (leftCost != null || rightCost != null) {
+    rows.push({
+      label: 'Cost',
+      left: leftCost ?? '—',
+      right: rightCost ?? '—',
+    })
+  }
+
+  return rows
+}
+
+function strategyLabel(details?: ExecutionDetails | null): string | null {
+  return details?.retrieval?.strategy ?? null
 }
 
 export function CompareRunsPage({ disabled }: CompareRunsPageProps) {
@@ -58,6 +138,7 @@ export function CompareRunsPage({ disabled }: CompareRunsPageProps) {
   const [standard, setStandard] = useState<AgentResponse | null>(null)
   const [advanced, setAdvanced] = useState<AgentResponse | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const [showTraces, setShowTraces] = useState(false)
   const runningLockRef = useRef(false)
 
   async function handleCompare() {
@@ -75,6 +156,7 @@ export function CompareRunsPage({ disabled }: CompareRunsPageProps) {
     setError(null)
     setStandard(null)
     setAdvanced(null)
+    setShowTraces(false)
 
     try {
       const result = await compareAgentRuns(trimmed)
@@ -99,8 +181,7 @@ export function CompareRunsPage({ disabled }: CompareRunsPageProps) {
     }
   }
 
-  const left = standard ? summarize(standard) : null
-  const right = advanced ? summarize(advanced) : null
+  const observed = standard && advanced ? buildObservedMetrics(standard, advanced) : []
 
   return (
     <div className="compare-page">
@@ -112,6 +193,46 @@ export function CompareRunsPage({ disabled }: CompareRunsPageProps) {
         </p>
       </header>
 
+      <div className="compare-mode-cards">
+        <article className="compare-mode-card">
+          <p className="compare-mode-card__badge">Standard</p>
+          <h3 className="compare-mode-card__title">Fast hybrid retrieval</h3>
+          <p className="compare-mode-card__summary">{STANDARD_SUMMARY}</p>
+          <p className="compare-mode-card__label">Best suited for</p>
+          <ul className="compare-mode-card__list">
+            <li>Straightforward knowledge questions</li>
+            <li>Lower latency</li>
+            <li>Lower compute</li>
+          </ul>
+          <p className="compare-mode-card__label">Pipeline</p>
+          <p className="compare-mode-card__pipeline-text">
+            Hybrid Retrieval → Reranking → Context → LLM
+          </p>
+          <RetrievalPipelineInline mode="standard" />
+        </article>
+
+        <article className="compare-mode-card compare-mode-card--accent">
+          <p className="compare-mode-card__badge">Advanced</p>
+          <h3 className="compare-mode-card__title">Multi-query retrieval + reranking</h3>
+          <p className="compare-mode-card__summary">{ADVANCED_SUMMARY}</p>
+          <p className="compare-mode-card__label">Best suited for</p>
+          <ul className="compare-mode-card__list">
+            <li>Ambiguous questions</li>
+            <li>Broader retrieval coverage</li>
+            <li>Harder grounding problems</li>
+          </ul>
+          <p className="compare-mode-card__label">Tradeoff</p>
+          <ul className="compare-mode-card__list">
+            <li>More retrieval work (query rewrite + multi-query hybrid)</li>
+            <li>Potentially higher latency / token usage / compute</li>
+            <li>Does not guarantee a better answer</li>
+          </ul>
+          <RetrievalPipelineInline mode="advanced" />
+        </article>
+      </div>
+
+      <p className="eval-disclaimer">{RETRIEVAL_TRADEOFF_NOTE}</p>
+
       <div className="compare-form">
         <label htmlFor="compare-question" className="tenant-selector__label">
           Knowledge question
@@ -121,6 +242,7 @@ export function CompareRunsPage({ disabled }: CompareRunsPageProps) {
           className="composer__textarea"
           value={question}
           disabled={running || disabled}
+          aria-label="Knowledge question for comparison"
           onChange={(event) => setQuestion(event.target.value)}
           rows={3}
         />
@@ -134,50 +256,76 @@ export function CompareRunsPage({ disabled }: CompareRunsPageProps) {
         </button>
       </div>
 
+      {running ? (
+        <LoadingBlock title="Running Standard and Advanced…" compact />
+      ) : null}
+
       {error ? <p className="page-error">{error}</p> : null}
       {note ? <p className="page-note">{note}</p> : null}
 
-      {left && right ? (
+      {standard && advanced ? (
         <>
-          <div className="table-wrap">
-            <table className="data-table compare-table">
-              <thead>
-                <tr>
-                  <th>Metric</th>
-                  <th>Standard</th>
-                  <th>Advanced</th>
-                </tr>
-              </thead>
-              <tbody>
-                {metric('Answer', left.answer, right.answer)}
-                {metric('Route', left.route, right.route)}
-                {metric('Retrieval mode', left.mode, right.mode)}
-                {metric('Strategy', left.strategy, right.strategy)}
-                {metric('Candidate count', left.candidates, right.candidates)}
-                {metric('Final chunks', left.finalChunks, right.finalChunks)}
-                {metric('Reranker', left.reranker, right.reranker)}
-                {metric('Cache', left.cache, right.cache)}
-                {metric('Latency', left.latency, right.latency)}
-                {metric('LLM calls', left.llmCalls, right.llmCalls)}
-                {metric('Input tokens', left.inputTokens, right.inputTokens)}
-                {metric('Output tokens', left.outputTokens, right.outputTokens)}
-                {metric('Total tokens', left.totalTokens, right.totalTokens)}
-                {metric('Estimated cost', left.cost, right.cost)}
-                {metric('Sources', left.sources.length, right.sources.length)}
-              </tbody>
-            </table>
+          {observed.length > 0 ? (
+            <section className="compare-observed">
+              <h3 className="compare-observed__title">Observed differences</h3>
+              <div className="table-wrap">
+                <table className="data-table compare-table">
+                  <thead>
+                    <tr>
+                      <th>Metric</th>
+                      <th>Standard</th>
+                      <th>Advanced</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {observed.map((row) => (
+                      <tr
+                        key={row.label}
+                        className={
+                          row.left !== row.right ? 'compare-table__row--diff' : undefined
+                        }
+                      >
+                        <th>{row.label}</th>
+                        <td>{row.left}</td>
+                        <td>{row.right}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {(strategyLabel(standard.execution_details) ||
+                strategyLabel(advanced.execution_details)) && (
+                <p className="page-note">
+                  Strategies:{' '}
+                  {strategyLabel(standard.execution_details) ?? '—'} vs{' '}
+                  {strategyLabel(advanced.execution_details) ?? '—'}
+                </p>
+              )}
+            </section>
+          ) : null}
+
+          <div className="compare-traces-toggle">
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => setShowTraces((current) => !current)}
+            >
+              {showTraces ? 'Hide execution traces' : 'Show execution traces'}
+            </button>
           </div>
 
-          <div className="compare-traces">
-            <section>
-              <h3>Standard Execution Trace</h3>
-              <ExecutionTrace details={standard?.execution_details} />
-            </section>
-            <section>
-              <h3>Advanced Execution Trace</h3>
-              <ExecutionTrace details={advanced?.execution_details} />
-            </section>
-          </div>
+          {showTraces ? (
+            <div className="compare-traces">
+              <section>
+                <h3>Standard Execution Trace</h3>
+                <ExecutionTrace details={standard.execution_details} />
+              </section>
+              <section>
+                <h3>Advanced Execution Trace</h3>
+                <ExecutionTrace details={advanced.execution_details} />
+              </section>
+            </div>
+          ) : null}
         </>
       ) : null}
     </div>

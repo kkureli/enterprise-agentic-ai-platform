@@ -1,7 +1,13 @@
 # Phase 8B — Low-Cost Cloud Deployment Runbook
 
-**Status:** preparation only. None of the new hosting/data resources below have
-been provisioned or deployed yet.
+**Status:** primary hosting and data plane are **provisioned and in use** for the
+public playground (Azure Container Apps, Static Web Apps, Neon, Qdrant Cloud,
+Upstash). This runbook remains the operational reference for env vars, cost
+controls, migrations, and remaining automation gaps.
+
+**Still pending:** full backend Container Apps CD via GitHub Actions + Azure
+OIDC (image publish to GHCR already exists). Treat ACA revision updates as
+manual / planned automation until that workflow ships.
 
 Target fixed monthly infrastructure cost ≈ **$0**.
 
@@ -189,8 +195,11 @@ az containerapp up \
 # az staticwebapp create ...
 ```
 
-Do **not** enable a deploy GitHub Action until Azure / Neon / Qdrant / Upstash
-credentials exist; current CI remains lint/test + Docker build-only.
+Do **not** assume Azure / Neon / Qdrant / Upstash credentials are absent — the
+public playground stack is already wired. Current CI publishes backend images to
+GHCR and deploys the frontend via Static Web Apps. Full Container Apps CD
+(Azure OIDC → revision) remains planned; keep ACA updates explicit until that
+workflow exists.
 
 ## Document storage
 

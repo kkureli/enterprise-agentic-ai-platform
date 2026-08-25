@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 
+import { modeLabel } from '../lib/retrievalModes'
 import type { ExecutionDetails, RetrievalChunkDetail } from '../types/agent'
 
 type ExecutionTraceProps = {
@@ -73,7 +74,13 @@ function ChunkInspector({ chunk, title }: { chunk: RetrievalChunkDetail; title?:
         <div>
           <strong>{title ?? chunk.filename}</strong>
           <p className="trace-chunk__meta">
-            Chunk {chunk.chunk_index}
+            <span className="trace-mono">chunk {chunk.chunk_index}</span>
+            {chunk.document_id ? (
+              <>
+                {' · '}
+                <span className="trace-mono">{chunk.document_id.slice(0, 8)}</span>
+              </>
+            ) : null}
             {chunk.score != null ? ` · Score ${chunk.score.toFixed(3)}` : ''}
             {chunk.rerank_score != null ? ` · Rerank ${chunk.rerank_score.toFixed(3)}` : ''}
           </p>
@@ -96,7 +103,15 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   )
 }
 
-function Kv({ label, value }: { label: string; value?: string | number | boolean | null }) {
+function Kv({
+  label,
+  value,
+  mono,
+}: {
+  label: string
+  value?: string | number | boolean | null
+  mono?: boolean
+}) {
   if (value == null || value === '') {
     return null
   }
@@ -104,7 +119,9 @@ function Kv({ label, value }: { label: string; value?: string | number | boolean
   return (
     <>
       <dt>{label}</dt>
-      <dd>{typeof value === 'boolean' ? (value ? 'true' : 'false') : value}</dd>
+      <dd className={mono ? 'trace-mono' : undefined}>
+        {typeof value === 'boolean' ? (value ? 'true' : 'false') : value}
+      </dd>
     </>
   )
 }
@@ -145,9 +162,9 @@ export function ExecutionTrace({ details }: ExecutionTraceProps) {
                 label="Retrieval"
                 value={
                   retrieval?.strategy
-                    ? retrieval.strategy
+                    ? `${modeLabel(retrieval.retrieval_mode)} · ${retrieval.strategy}`
                     : retrieval?.retrieval_mode
-                      ? retrieval.retrieval_mode
+                      ? modeLabel(retrieval.retrieval_mode)
                       : null
                 }
               />
@@ -162,17 +179,17 @@ export function ExecutionTrace({ details }: ExecutionTraceProps) {
                 label={cost?.label ?? 'Estimated cost'}
                 value={formatCost(cost?.estimated_total_cost_usd)}
               />
-              <Kv label="Observability ID" value={details.observability_id} />
+              <Kv label="Observability ID" value={details.observability_id} mono />
             </dl>
           </Section>
         ) : null}
 
         {graphPath.length > 0 ? (
-          <Section title="Graph execution">
+          <Section title="Graph">
             <ol className="graph-path">
               {graphPath.map((node, index) => (
                 <li key={`${node}-${index}`} className="graph-path__item">
-                  <span className="graph-path__node">{nodeLabel(node)}</span>
+                  <span className="graph-path__node trace-mono">{nodeLabel(node)}</span>
                   {index < graphPath.length - 1 ? (
                     <span className="graph-path__arrow" aria-hidden="true">
                       ↓
@@ -187,27 +204,42 @@ export function ExecutionTrace({ details }: ExecutionTraceProps) {
         {retrieval ? (
           <Section title="Retrieval">
             <dl className="trace-kv">
-              <Kv label="Mode" value={retrieval.retrieval_mode} />
+              <Kv label="Mode" value={modeLabel(retrieval.retrieval_mode)} />
               <Kv label="Strategy" value={retrieval.strategy} />
+              {retrieval.dense_weight != null ? (
+                <Kv label="Dense" value="Enabled" />
+              ) : null}
+              {retrieval.sparse_weight != null ? (
+                <Kv label="Sparse" value="Enabled" />
+              ) : null}
+              <Kv label="Dense weight" value={retrieval.dense_weight} />
+              <Kv label="Sparse weight" value={retrieval.sparse_weight} />
               <Kv
                 label="Query rewrites"
                 value={
                   retrieval.query_rewrites?.length
-                    ? retrieval.query_rewrites.join(' | ')
+                    ? `${retrieval.query_rewrites.length} · ${retrieval.query_rewrites.join(' | ')}`
                     : null
                 }
               />
-              <Kv label="Dense weight" value={retrieval.dense_weight} />
-              <Kv label="Sparse weight" value={retrieval.sparse_weight} />
-              <Kv label="Candidates" value={retrieval.candidate_count} />
-              <Kv label="Reranker" value={retrieval.reranker_enabled} />
-              <Kv label="Final chunks" value={retrieval.final_chunk_count} />
+              <Kv label="Candidate chunks" value={retrieval.candidate_count} />
+              <Kv
+                label="Reranker"
+                value={
+                  retrieval.reranker_enabled == null
+                    ? null
+                    : retrieval.reranker_enabled
+                      ? 'Yes'
+                      : 'No'
+                }
+              />
+              <Kv label="Context chunks" value={retrieval.final_chunk_count} />
             </dl>
           </Section>
         ) : null}
 
         {sources.length > 0 || (retrieval?.context_chunks?.length ?? 0) > 0 ? (
-          <Section title="Sources / Context">
+          <Section title="Sources">
             <p className="trace-note">
               Chunks actually used for grounding. Expand to verify indexed text.
             </p>
@@ -255,8 +287,8 @@ export function ExecutionTrace({ details }: ExecutionTraceProps) {
         {tools ? (
           <Section title="Tools">
             <dl className="trace-kv">
-              <Kv label="MCP server" value={tools.mcp_server} />
-              <Kv label="Tool" value={tools.tool_name} />
+              <Kv label="MCP server" value={tools.mcp_server} mono />
+              <Kv label="Tool" value={tools.tool_name} mono />
               <Kv label="Type" value={tools.tool_type} />
               <Kv label="Requires approval" value={tools.requires_approval} />
               <Kv label="Approval status" value={tools.approval_status} />

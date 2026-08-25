@@ -1,16 +1,18 @@
 # Architecture
 
-## Current Architecture — Sprint 0–8 (Phase 8A packaging)
+## Current Architecture — Sprints 0–8
 
-The platform currently provides a multi-tenant FastAPI backend with document
-ingestion, hybrid retrieval, reranking, multi-query RAG modes, retrieval
-evaluation, a **router-based LangGraph agent** with knowledge (RAG), SQL, and
-MCP tool routes, **HITL approval** for write actions, **Langfuse tracing**,
-agent evaluation, a **React chat frontend**, and **backend production container
-packaging**. JWT/RBAC, persistent production checkpoint storage, persistent chat
-history, and Azure cloud deployment remain planned — production deployment is
-**not** complete. Sprint 8 Phase 8A packages the backend image only; Azure
-resource provisioning is Phase 8B.
+The platform provides a multi-tenant FastAPI backend with document ingestion,
+hybrid retrieval, reranking, Standard/Advanced multi-query RAG, retrieval and
+agent evaluation, a **router-based LangGraph agent** (knowledge / SQL / MCP /
+unsupported), **HITL approval** for write actions, **Langfuse tracing**, a
+**React Enterprise Agentic AI Playground**, and **low-cost Azure cloud hosting**
+(Static Web Apps + Container Apps, Neon, Qdrant Cloud, Upstash).
+
+JWT/RBAC as a public product layer, durable Blob document storage, OpenTelemetry
+beyond Langfuse, and **full backend Container Apps CD automation** remain
+planned. Production checkpoints use PostgreSQL when
+`CHECKPOINT_BACKEND=postgres`.
 
 ```mermaid
 flowchart TD
@@ -240,11 +242,12 @@ Failure / conflict handling:
 
 ### Checkpoints
 
-The compiled graph uses LangGraph **`InMemorySaver`** for local development.
+Local development defaults to LangGraph **`InMemorySaver`**
+(`CHECKPOINT_BACKEND=memory`).
 
-This is **not** production-ready: process restarts lose paused approval threads.
-Replace with persistent checkpoint storage (e.g. Postgres or Redis-backed
-checkpointer) before production deployment.
+Production / cloud uses **`AsyncPostgresSaver`** against the application
+PostgreSQL database (`CHECKPOINT_BACKEND=postgres`, same Neon `DATABASE_URL`).
+Checkpoint tables are created on startup via `AsyncPostgresSaver.setup()`.
 
 ## Observability (Sprint 6)
 
@@ -486,15 +489,14 @@ LLM final answer → tool_answer → Finalize
 
 ### What is intentionally not implemented yet
 
-- JWT / RBAC / authenticated tenant context
-- Persistent production checkpointer (current: `InMemorySaver`)
-- Cloud / Azure production deployment
+- JWT / RBAC / authenticated public product layer
+- Durable Azure Blob storage for uploaded original files
+- Full backend Container Apps CD (Azure OIDC → revision); GHCR publish exists
 - OpenTelemetry (Langfuse is implemented; OTel remains planned)
 - CI-enforced evaluation regression gates
-- Real external enterprise APIs beyond local PostgreSQL + MCP demo
+- Real external enterprise APIs beyond local PostgreSQL + MCP demo data
 - Multi-agent supervisor orchestration
 - Automatic retry policies
-- React approval UI (inline approval card implemented in Sprint 7 chat UI)
 
 ## Multi-Tenant Data Model
 
@@ -729,43 +731,35 @@ docker build -f backend/Dockerfile -t enterprise-agentic-ai-backend .
   `CORS_ORIGINS`, optional `MCP_SERVER_DIR`)
 - Local/dev machines use explicit env files:
   `uv run --env-file .env.development|production ...` (no silent shared `.env`)
-- Frontend continues to use Vite mode files (`.env.development` /
-  `.env.production`) and build-time `VITE_API_BASE_URL` (no frontend Docker
-  image in Phase 8A)
-- CI validates image build only (no push / no deploy)
+- Frontend uses Vite mode files (`.env.development` / `.env.production`) and
+  build-time `VITE_API_BASE_URL` (no frontend Docker image)
+- CI: Ruff + pytest; Docker build validation; GHCR image publish on backend
+  path changes; Static Web Apps frontend deploy workflow
 
-### Document storage limitation
+### Azure status
 
-`DOCUMENT_STORAGE_PATH` (default `/app/storage/documents` in the container) is
-local filesystem storage suitable for development only. It is **not** durable
-across container restarts/redeploys. Phase 8B should move uploaded documents to
-persistent object storage (preferred: Azure Blob Storage).
+Application hosting and free-tier data services are in use for the public
+playground:
 
-### Azure status (Phase 8A)
-
-No new application-hosting Azure resources were provisioned in Phase 8A.
-Existing Azure AI Foundry, Application Insights, and Log Analytics resources
-remain in use. The FastAPI backend and React frontend have not yet been
-deployed to Azure.
-
-### Phase 8B target (prepared in-repo, not provisioned)
-
-Low-cost portfolio deploy (~$0 fixed monthly):
-
-| Layer | Target |
-|-------|--------|
-| Frontend | Azure Static Web Apps Free |
-| Backend | Azure Container Apps Consumption, `minReplicas=0`, port 8000 |
+| Layer | Current |
+|-------|---------|
+| Frontend | Azure Static Web Apps |
+| Backend | Azure Container Apps Consumption (`minReplicas=0`, port 8000) |
 | PostgreSQL | Neon Free (`DATABASE_URL`, `ssl=require`) |
 | HITL checkpoints | Same Neon DB via `CHECKPOINT_BACKEND=postgres` |
 | Vectors | Qdrant Cloud Free (`QDRANT_URL` + `QDRANT_API_KEY`) |
-| Redis | Upstash Free (`REDIS_URL=rediss://...`) — RAG cache + agent rate limiting |
+| Redis | Upstash Free (`REDIS_URL=rediss://...`) — RAG cache + rate / demo budget guards |
 | LLM | Existing Azure AI Foundry / Azure OpenAI |
-| Observability | Existing Langfuse + App Insights / Log Analytics |
+| Observability | Existing Langfuse (+ App Insights / Log Analytics where used) |
+| Registry | GHCR (`backend-image.yml`) |
 
 Local default remains `CHECKPOINT_BACKEND=memory` (`InMemorySaver`).
 Production selects PostgreSQL-backed LangGraph checkpoints without a second
-database. See `docs/phase-8b-runbook.md` for manual steps.
+database. See `docs/phase-8b-runbook.md` for env and operational steps.
+
+**Remaining:** backend full CD (GHCR → Azure OIDC → Container Apps revision).
+Frontend Static Web Apps deploy workflow already exists. Latest local frontend
+UX polish must be committed before it is live on SWA.
 
 After Neon `DATABASE_URL` is configured:
 
@@ -775,6 +769,13 @@ cd backend && uv run --env-file .env.production alembic upgrade head
 
 Checkpoint tables are created on startup by `AsyncPostgresSaver.setup()` when
 `CHECKPOINT_BACKEND=postgres`.
+
+### Document storage limitation
+
+`DOCUMENT_STORAGE_PATH` (default `/app/storage/documents` in the container) is
+local filesystem storage suitable for development / demo seeding. It is **not**
+durable across container restarts/redeploys. Preferred follow-up: Azure Blob
+Storage for uploaded originals.
 
 ### Phase 8B cost constraint
 
@@ -886,12 +887,13 @@ flowchart LR
 
 ### Infrastructure
 
-- Docker Compose
-- Redis
-- Azure OpenAI
-- Local MCP server under `/mcp` (stdio)
-- LangGraph `InMemorySaver` (dev checkpoints only)
+- Docker Compose (local)
+- Redis / Upstash
+- Azure OpenAI / Foundry
+- Local MCP server under `/mcp` (stdio; packaged in backend image)
+- LangGraph checkpoints: `InMemorySaver` (dev) / Postgres saver (production)
 - Langfuse (local / cloud tracing)
+- Azure Container Apps + Static Web Apps + GHCR
 
 ### Quality
 

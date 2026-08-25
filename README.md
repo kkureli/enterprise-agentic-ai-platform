@@ -1,529 +1,500 @@
 # Enterprise Agentic AI Platform
 
-A production-oriented, multi-tenant platform for building enterprise LLM, RAG, and agentic AI workflows.
+Production-oriented multi-tenant LLM, RAG, SQL, MCP and agentic AI playground.
 
-The project is being developed incrementally with a focus on software engineering quality, tenant isolation, observability, evaluation, enterprise tool integration, and deployability.
+Enterprise Agentic AI Platform is an engineering reference implementation and an
+interactive portfolio demo. It shows how to build multi-tenant AI operations
+workflows with advanced RAG, structured-data reasoning, MCP tools, human
+approval, evaluation, observability, cost controls, and low-cost Azure
+deployment — not a finished commercial SaaS product.
 
-## Current Status
+The public UI is the **Enterprise Agentic AI Playground**.
 
-**Sprint 0 — Repository & Architecture Foundation: completed**
+More detail: [`docs/project-plan.md`](docs/project-plan.md) ·
+[`docs/architecture.md`](docs/architecture.md) ·
+[`docs/phase-8b-runbook.md`](docs/phase-8b-runbook.md)
 
-**Sprint 1 — Enterprise Knowledge Ingestion & RAG v1: completed**
+---
 
-**Sprint 2 — Advanced Retrieval & Evaluation: completed**
+## Overview
 
-**Sprint 3 — LangGraph Agent Orchestration: completed**
+The platform demonstrates:
 
-**Sprint 4 — MCP & Enterprise Tool Integration: completed**
+- Multi-tenant knowledge RAG with dense + sparse hybrid retrieval and reranking
+- LangGraph agent routing across knowledge, SQL, MCP tools, and unsupported paths
+- Human-in-the-loop approval for sensitive write actions
+- Evaluation/regression metrics and Langfuse observability
+- A React playground for exploring tenant isolation, Compare Runs, and Execution Trace
+- Cloud hosting on Azure Container Apps + Static Web Apps with free-tier data services
 
-**Sprint 5 — SQL Agent, Security & Human-in-the-Loop: completed**
+---
 
-**Sprint 6 — Evaluation, Langfuse & Production Observability: completed**
-
-**Sprint 7 — React UI & Production UX: completed**
-
-**Sprint 8 — Azure Deployment & CI/CD: in progress (Phase 8A packaging complete)**
-
-Implemented so far:
-
-- FastAPI backend with tenant-scoped APIs
-- Async SQLAlchemy 2 + PostgreSQL + Alembic
-- Operational models: `assets`, `maintenance_records`, `maintenance_tickets`
-- Redis and Qdrant infrastructure
-- Document upload, parsing, chunking, and Azure OpenAI embeddings
-- Dense + sparse hybrid retrieval with weighted RRF, reranking, multi-query RAG
-- Retrieval evaluation (Recall@K, MRR, nDCG@K) with persisted results
-- LangGraph routes: `knowledge` / `sql` / `tool` / `unsupported`
-- NL → SQL pipeline with SQLGlot validation, tenant scoping, and read-only transactions
-- Separate MCP server under `/mcp` (stdio); host intercepts write tools for HITL
-- Real maintenance-ticket persistence after human approval (`interrupt` / `Command(resume=...)`)
-- Agent approval API with `thread_id` checkpoints (`InMemorySaver` — development only)
-- Langfuse tracing for LangGraph runs and nested LLM calls (latency, tokens, model, cost)
-- 24-case agent golden dataset with router and end-to-end evaluation
-- React + TypeScript chat frontend with HITL approval card and route indicators
-- Backend production Docker packaging (uv + uvicorn; no secrets in image)
-- Health/readiness endpoints, Ruff, pytest (21 passing), and GitHub Actions CI
-
-Current agent orchestration:
-
-```text
-START → LLM Router
-          ├── knowledge → RAG Node → Finalize → END
-          ├── sql → SQL Node → Finalize → END
-          ├── tool → MCP Tool Node
-          │            ├── read → Finalize → END
-          │            └── write → Approval → Approved Action / Reject → Finalize → END
-          └── unsupported → Fallback → END
-```
-
-Checkpoints use `InMemorySaver` for local development and must be replaced with
-persistent storage before production. JWT/RBAC and cloud deployment remain planned.
-
-More detail: [`docs/project-plan.md`](docs/project-plan.md) · [`docs/architecture.md`](docs/architecture.md)
-
-## Architecture
+## Live Architecture
 
 ```mermaid
 flowchart TD
-    Client[API Client / Swagger]
+  Browser[Browser]
+  SWA[Azure Static Web Apps<br/>React / Vite]
+  ACA[Azure Container Apps<br/>FastAPI + LangGraph]
+  Neon[(Neon PostgreSQL)]
+  Qdrant[(Qdrant Cloud)]
+  Redis[(Upstash Redis)]
+  AOAI[Azure OpenAI / Foundry]
+  MCP[MCP server<br/>in backend image]
+  Langfuse[Langfuse]
 
-    Client --> FastAPI[FastAPI Application]
-
-    FastAPI --> TenantAPI[Tenant API]
-    FastAPI --> UserAPI[User API]
-    FastAPI --> DocumentAPI[Document API]
-    FastAPI --> RetrievalAPI[Retrieval API]
-    FastAPI --> RagAPI[RAG API]
-    FastAPI --> AgentAPI[Agent API]
-    FastAPI --> HealthAPI[Health & Readiness API]
-
-    TenantAPI --> Session[SQLAlchemy AsyncSession]
-    UserAPI --> Session
-    DocumentAPI --> Session
-
-    Session --> Engine[SQLAlchemy Async Engine]
-    Engine --> AsyncPG[asyncpg]
-    AsyncPG --> PostgreSQL[(PostgreSQL)]
-
-    DocumentAPI --> Storage[Local Document Storage]
-    DocumentAPI --> Qdrant[(Qdrant)]
-    RetrievalAPI --> Qdrant
-    RagAPI --> Qdrant
-    RagAPI --> Azure[Azure OpenAI]
-    AgentAPI --> LangGraph[LangGraph Router]
-    LangGraph --> RagAPI
-    LangGraph --> SQLAgent[SQL Agent]
-    SQLAgent --> PostgreSQL
-    LangGraph --> MCPClient[MCP Client stdio]
-    MCPClient --> MCPServer[MCP Server /mcp]
-    LangGraph --> HITL[HITL Approval]
-    HITL --> PostgreSQL
-    LangGraph --> Azure
-    AgentAPI --> Langfuse[Langfuse Tracing]
-    LangGraph --> Langfuse
-
-    HealthAPI --> PostgreSQL
-    HealthAPI --> Redis[(Redis)]
-    HealthAPI --> Qdrant
-
-    RagAPI --> RagCache[RAG Response Cache]
-    RagCache --> Redis
-    AgentAPI --> RateLimit[Agent Rate Limit]
-    RateLimit --> Redis
-
-    Alembic[Alembic Migrations] --> PostgreSQL
-
-    Pytest[pytest Integration Tests] --> FastAPI
-    Ruff[Ruff Lint & Format] --> FastAPI
-
-    GitHub[GitHub Actions CI]
-    GitHub --> Ruff
-    GitHub --> Pytest
+  Browser --> SWA
+  SWA -->|HTTPS API| ACA
+  ACA --> Neon
+  ACA --> Qdrant
+  ACA --> Redis
+  ACA --> AOAI
+  ACA --> MCP
+  ACA --> Langfuse
 ```
 
-## Multi-Tenant Model
+**Deployment path (not request-time):** GitHub Actions → Docker image →
+**GHCR** → (manual / planned OIDC) Azure Container Apps revision. Frontend:
+GitHub Actions → Vite build → Azure Static Web Apps.
+
+Local development still uses Docker Compose for PostgreSQL, Redis, and Qdrant.
+
+---
+
+## Key Capabilities
+
+| Area | Capability |
+|------|------------|
+| RAG | Dense + sparse hybrid retrieval, weighted RRF, cross-encoder reranking, Standard / Advanced modes |
+| Agents | LangGraph router → knowledge / SQL / MCP tool / unsupported |
+| SQL | LLM SQL + SQLGlot validation, SELECT-only, allowed tables, tenant bind param, read-only execution |
+| MCP | `get_asset_status`, `get_maintenance_history`, `create_maintenance_ticket` |
+| HITL | Write tools pause for human approval; approved actions persist tickets |
+| Tenancy | PostgreSQL `tenant_id` + Qdrant payload filters |
+| Cache / cost | Redis RAG cache, layered rate limits, public-demo budget guards |
+| Checkpoints | PostgreSQL LangGraph checkpoints in production (`CHECKPOINT_BACKEND=postgres`) |
+| Observability | Langfuse + in-app Execution Trace |
+| Evaluation | Agent (24 cases) + retrieval (15 queries, k=3) golden sets |
+
+---
+
+## AI Playground
+
+The React playground includes:
+
+- **Playground** — chat, retrieval mode selector, tenant isolation demo prompts
+- **Documents** — read-only inspect of seeded indexed documents/chunks
+- **Operations** — assets, maintenance history, tickets
+- **Compare Runs** — same question with Standard vs Advanced retrieval
+- **Evaluation** — persisted regression metrics
+- **System Status** — safe readiness view (no secrets/URLs)
+- **Architecture** — system topology (local working tree also includes a detailed RAG Pipeline Explorer pending commit/deploy)
+
+Tenant selector loads demo tenants from `GET /api/v1/demo/tenants`. The public
+UI does **not** expose unrestricted document upload.
+
+---
+
+## RAG Architecture
+
+Both **Standard** and **Advanced** modes use:
+
+- Dense semantic retrieval (Azure OpenAI embeddings → Qdrant dense)
+- Sparse / lexical retrieval (BM25 sparse vectors → Qdrant sparse)
+- Hybrid fusion via weighted Reciprocal Rank Fusion (RRF)
+- Tenant-scoped Qdrant `tenant_id` filtering
+- Cross-encoder reranking (`ms-marco-MiniLM-L-6-v2`) + hybrid/reranker fusion
+
+**Advanced** additionally:
+
+- Query rewriting / multi-query generation
+- Hybrid retrieval per rewritten query
+- Fusion across query result sets
+- Broader candidate coverage (usually higher latency / compute)
+
+Reranking is **not** Advanced-only.
+
+### Standard
 
 ```text
-Tenant
- ├── Users
- ├── Documents / Vector Chunks
- └── Operational data
-      ├── Assets
-      ├── Maintenance Records
-      └── Maintenance Tickets
+Query
+  → Dense + Sparse Retrieval
+  → Hybrid Fusion / RRF
+  → Cross-Encoder Reranking
+  → Context
+  → LLM
 ```
 
-Each user, document, and operational row belongs to one tenant through `tenant_id`.  
-Retrieval/RAG apply tenant filters in Qdrant; SQL agent queries must filter by `:tenant_id`.
-
-User email uniqueness is scoped per tenant:
+### Advanced
 
 ```text
-UNIQUE (tenant_id, email)
+Query
+  → Query Rewrite / Multi-Query
+  → Dense + Sparse Retrieval per query
+  → Multi-query Fusion
+  → Cross-Encoder Reranking
+  → Context
+  → LLM
 ```
+
+**Tradeoff:** Standard is optimized for lower retrieval overhead and speed.
+Advanced increases retrieval depth and usually cost/latency. Advanced does
+**not** always produce a better answer.
+
+### Ingestion
+
+```text
+Document → parse → chunk → dense embeddings → sparse representation
+  → Qdrant upsert (tenant_id payload) → indexed chunks
+```
+
+Document metadata is stored in PostgreSQL. After successful ingestion, the
+tenant RAG knowledge version is incremented so Redis-cached answers for prior
+knowledge are logically invalidated.
+
+**Limitation:** original uploaded files use container/local filesystem storage
+(`DOCUMENT_STORAGE_PATH`). This is **not** durable Azure Blob Storage.
+
+---
+
+## Agent Architecture
+
+LangGraph nodes are routed workflow steps — not separate autonomous “agents.”
+
+```text
+START → Router
+          ├── knowledge → RAG → Finalize → END
+          ├── sql → SQL pipeline → Finalize → END
+          ├── tool → MCP tool node
+          │            ├── read → Finalize → END
+          │            └── write → approval interrupt
+          │                           ├── approve → approved action → Finalize → END
+          │                           └── reject → Finalize → END
+          └── unsupported → fallback → END
+```
+
+Production HITL checkpoints use **PostgreSQL** (`AsyncPostgresSaver` on Neon).
+Local default remains `CHECKPOINT_BACKEND=memory`.
+
+### SQL safety (implemented)
+
+- LLM-generated SQL
+- SQLGlot validation
+- SELECT-only
+- Allowed-table enforcement
+- `:tenant_id` bind parameter + tenant scoping checks
+- Read-only transaction / bounded result execution
+
+PostgreSQL RLS / dedicated read-only DB role remain recommended
+defense-in-depth improvements, not current product features.
+
+### MCP tools
+
+| Tool | Type | Notes |
+|------|------|-------|
+| `get_asset_status` | Read | Demo/simulated operational status via MCP |
+| `get_maintenance_history` | Read | Demo/simulated history via MCP |
+| `create_maintenance_ticket` | Write | Host-intercepted; HITL required; host persists to PostgreSQL |
+
+The MCP stdio server ships in the backend container (`/app/mcp`). Tool data is
+demo/synthetic — not a live CMMS/ERP integration.
+
+---
+
+## Multi-Tenant Isolation
+
+Public demo tenants:
+
+1. **Atlas Manufacturing**
+2. **Borealis Cold Chain**
+3. **Helios Energy Services**
+
+Deliberate **E-100** isolation demo (same code, different grounded meaning):
+
+| Tenant | E-100 meaning |
+|--------|----------------|
+| Atlas Manufacturing | Lubrication pressure below safe operating threshold |
+| Borealis Cold Chain | Evaporator coil temperature sensor communication failure |
+| Helios Energy Services | Power inverter communication timeout with site controller |
+
+Answers come from **live tenant-scoped retrieval**, not frontend hardcoding.
+
+---
+
+## Execution Trace / AI Inspector
+
+Assistant answers can expose a curated operational trace, including:
+
+- Route and graph path
+- Retrieval mode, strategy, query rewrites
+- Candidate / context chunks and scores when present
+- SQL metadata, MCP/tool metadata, HITL state
+- Cache hit/miss, latency, token usage, estimated cost
+
+This is **operational execution metadata**. It does **not** expose hidden
+chain-of-thought, system prompts, secrets, or credentials.
+
+Langfuse remains deeper server-side observability.
+
+---
+
+## Evaluation
+
+Metrics are from a small curated regression dataset and are **not** claims of
+universal production accuracy.
+
+### Agent evaluation (`evals/results/agent_evaluation.json`)
+
+24 cases:
+
+| Metric | Value |
+|--------|-------|
+| Route accuracy | 1.0 |
+| Approval accuracy | 1.0 |
+| Execution success | 1.0 |
+| End-to-end / workflow pass | 1.0 |
+
+### Retrieval evaluation (`evals/results/retrieval_results.json`)
+
+15 queries · k=3:
+
+| Strategy | Recall@3 | MRR | nDCG@3 |
+|----------|----------|-----|--------|
+| Dense | 1.000 | 1.000 | 1.000 |
+| Sparse | 0.933 | 0.900 | 0.909 |
+| Hybrid | 1.000 | 1.000 | 0.995 |
+| Hybrid + Reranker | 1.000 | 1.000 | 0.995 |
+| Multi-Query Hybrid | 1.000 | 1.000 | 1.000 |
+| Multi-Query + Reranker | 1.000 | 1.000 | 1.000 |
+
+---
+
+## Public Demo Safety / Cost Controls
+
+Redis is used for:
+
+- Tenant-aware RAG response cache (mode + knowledge-version aware)
+- Client / tenant / global rate limiting
+- Hard daily public-demo AI request ceiling
+- Compare Runs stricter limit
+- Approved write-action limiting
+
+Redis is **not** used for primary data, vectors, or LangGraph checkpoints.
+
+Layered protections (when configured for public demo):
+
+1. RAG caching
+2. Client rate limiting
+3. Tenant rate limiting
+4. Global AI request limit
+5. Hard daily demo request ceiling
+6. Maximum prompt length
+7. Compare Runs stricter limit
+8. Approved-write limiting
+9. Container Apps `maxReplicas=1`
+10. Container Apps `minReplicas=0` (scale-to-zero / cold starts)
+
+Ordinary Redis cache/rate-limit failures **fail open** where configured.
+The hard daily public-demo budget **fails closed** when `PUBLIC_DEMO_MODE=true`.
+
+These controls reduce abuse risk; they do **not** guarantee zero cloud spend.
+Azure subscription budgets/alerts are separate infrastructure controls.
+
+---
 
 ## Tech Stack
 
-### Backend
+**AI:** Azure OpenAI / Foundry · LangGraph · LangChain (where used) · MCP ·
+sentence-transformers CrossEncoder
 
-- Python 3.12
-- FastAPI
-- Pydantic
-- SQLAlchemy 2 Async
-- asyncpg
-- Alembic
-- SQLGlot (SQL validation)
+**Retrieval:** Qdrant · dense embeddings · BM25 sparse · hybrid RRF · reranking
 
-### Data & Infrastructure
+**Backend:** Python 3.12 · FastAPI · Pydantic · SQLAlchemy · SQLGlot ·
+PostgreSQL · Redis
 
-- PostgreSQL
-- Redis (RAG response cache + agent rate limiting)
-- Qdrant
-- Docker Compose
-- Azure OpenAI (embeddings + chat)
-- FastEmbed BM25 (sparse)
-- CrossEncoder reranker
-- LangGraph (router + HITL interrupt / resume)
-- MCP (stdio tool server under `/mcp`)
-- Langfuse (LangGraph + LLM tracing)
+**Frontend:** React · TypeScript · Vite
 
-### Quality
+**Observability / eval:** Langfuse · golden datasets · Recall / MRR / nDCG ·
+token / cost / latency instrumentation
 
-- pytest
-- pytest-asyncio
-- HTTPX
-- Ruff
-- GitHub Actions
-- Retrieval evaluation under `evals/`
+**Cloud:** Azure Container Apps · Azure Static Web Apps · Neon · Qdrant Cloud ·
+Upstash · GHCR · GitHub Actions
+
+---
 
 ## Repository Structure
 
 ```text
 enterprise-agentic-ai-platform/
-├── backend/
-│   ├── alembic/
-│   ├── app/
-│   │   ├── api/
-│   │   ├── agents/
-│   │   ├── core/
-│   │   ├── db/
-│   │   ├── models/
-│   │   ├── schemas/
-│   │   └── services/
-│   ├── scripts/
-│   └── tests/
-├── docs/
-├── evals/
-│   ├── agent/
-│   ├── datasets/
-│   ├── results/
-│   └── retrieval/
-├── frontend/
-├── infra/
-├── mcp/
-├── .github/
-│   └── workflows/
+├── backend/          # FastAPI app, agents, services, Alembic, tests
+├── frontend/         # React/Vite playground
+├── mcp/              # MCP stdio server (packaged into backend image)
+├── evals/            # Agent + retrieval golden sets and results
+├── data/demo_tenants/# Seeded tenant knowledge documents
+├── docs/             # Architecture, project plan, Phase 8B runbook
+├── .github/workflows/# CI, GHCR image publish, Static Web Apps deploy
 ├── docker-compose.yml
 └── README.md
 ```
 
+---
+
 ## Local Development
 
-### 1. Start infrastructure
-
-From the repository root:
+### 1. Infrastructure
 
 ```bash
 docker compose up -d
 ```
 
-This starts:
+Starts PostgreSQL (`5432`), Redis (`6379`), and Qdrant (`6333` / `6334`).
 
-- PostgreSQL on `5432`
-- Redis on `6379`
-- Qdrant on `6333` / `6334`
-
-### 2. Install backend dependencies
+### 2. Backend
 
 ```bash
-cd backend && uv sync --dev
-```
-
-### 3. Configure environment
-
-Use **separate** untracked env files (do not mix local and cloud URLs in one file):
-
-```bash
-cp .env.example .env.development   # local Docker Postgres / Redis / Qdrant
-cp .env.example .env.production    # Neon / Qdrant Cloud / Upstash (local test only)
-```
-
-Always select the file explicitly with `uv run --env-file ...`. Settings do **not**
-auto-load a shared `.env`.
-
-Local development should use:
-
-```text
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/agentic_ai
-REDIS_URL=redis://localhost:6379
-REDIS_ENABLED=true
-RAG_CACHE_TTL_SECONDS=300
-AGENT_RATE_LIMIT_REQUESTS=30
-AGENT_RATE_LIMIT_WINDOW_SECONDS=60
-QDRANT_URL=http://localhost:6333
-CHECKPOINT_BACKEND=memory
-```
-
-Fill Azure OpenAI / Langfuse keys in `.env.development` as needed. Never commit
-real secrets. Never put both localhost and cloud `QDRANT_URL` values in the same file.
-
-### 4. Run migrations
-
-```bash
+cd backend
+uv sync --dev
+cp .env.example .env.development
+# fill Azure OpenAI / Langfuse as needed
 uv run --env-file .env.development alembic upgrade head
-```
-
-Against Neon (from your machine, using production config):
-
-```bash
-uv run --env-file .env.production alembic upgrade head
-```
-
-### 5. Start the API
-
-```bash
 uv run --env-file .env.development uvicorn app.main:app --reload
 ```
 
-Local test against cloud services:
-
-```bash
-uv run --env-file .env.production uvicorn app.main:app
-```
-
-### 6. Start the frontend (Sprint 7)
-
-From the repository root:
-
-```bash
-cd frontend
-cp .env.example .env.development
-cp .env.example .env.production
-npm install
-npm run dev
-```
-
-Vite loads `.env.development` for `npm run dev` and `.env.production` for
-`npm run build`. Local API base:
-
-```text
-VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
-VITE_TENANT_ID=
-```
-
-If `VITE_TENANT_ID` is empty, the playground loads demo tenants from
-`GET /api/v1/demo/tenants` after seeding.
-
-Seed the public demo playground (idempotent):
+Demo seed (idempotent):
 
 ```bash
 cd backend
 PYTHONPATH=. uv run --env-file .env.development python scripts/seed_demo_playground.py
 ```
 
-Useful URLs:
+### 3. Frontend
 
-- API: `http://127.0.0.1:8000`
-- Swagger: `http://127.0.0.1:8000/docs`
-- Playground UI: `http://localhost:5173`
-- Health: `http://127.0.0.1:8000/health`
-- Readiness: `http://127.0.0.1:8000/ready`
-- Qdrant dashboard: `http://localhost:6333/dashboard`
-
-## Current API
-
-### Health
-
-```text
-GET /health
-GET /ready
+```bash
+cd frontend
+cp .env.example .env.development
+npm install
+npm run dev
 ```
 
-### Tenants
+Useful URLs: API `http://127.0.0.1:8000` · Swagger `/docs` · UI
+`http://localhost:5173` · Health `/health` · Ready `/ready`
 
-```text
-POST /api/v1/tenants
-GET  /api/v1/tenants/{tenant_id}
-```
+Never commit real secrets. Do not mix localhost and cloud URLs in one env file.
 
-### Users
+---
 
-```text
-POST /api/v1/tenants/{tenant_id}/users
-GET  /api/v1/tenants/{tenant_id}/users
-GET  /api/v1/users/{user_id}
-```
+## Environment Configuration
 
-### Documents
+Backend settings read **process environment only** (explicit `--env-file`).
 
-```text
-POST /api/v1/tenants/{tenant_id}/documents
-GET  /api/v1/tenants/{tenant_id}/documents/{document_id}
-```
+| File | Purpose |
+|------|---------|
+| `backend/.env.example` | Tracked placeholders |
+| `backend/.env.development` | Local Docker services (gitignored) |
+| `backend/.env.production` | Local testing against cloud services (gitignored) |
+| `frontend/.env.example` | Tracked placeholders |
+| `frontend/.env.development` / `.env.production` | Vite mode files (gitignored) |
 
-### Retrieval
+Production values are injected as Container Apps / Static Web Apps
+secrets/variables. See `backend/.env.example` for the full key list.
 
-```text
-POST /api/v1/tenants/{tenant_id}/retrieval
-```
-
-### RAG
-
-```text
-POST /api/v1/tenants/{tenant_id}/rag
-```
-
-RAG accepts `retrieval_mode`:
-
-- `"standard"` (default) — hybrid + reranker + final fusion
-- `"advanced"` — multi-query hybrid + reranker + final fusion
-
-### Agent
-
-```text
-POST /api/v1/tenants/{tenant_id}/agent
-POST /api/v1/tenants/{tenant_id}/agent/{thread_id}/approval
-```
-
-Router-based LangGraph orchestration with `knowledge`, `sql`, `tool`, and
-`unsupported` routes. Agent responses include `thread_id` and `status`
-(`completed` | `approval_required`). Write actions pause for human approval;
-resume with `{ "approved": true|false }`. Graph execution failures map to HTTP 503.
+---
 
 ## Testing
 
-Tests use a dedicated PostgreSQL database:
-
-```text
-agentic_ai_test
-```
-
-Run:
-
 ```bash
 cd backend && uv run pytest -q
+cd backend && uv run ruff check app tests && uv run ruff format --check app tests
+cd frontend && npm run lint && npm run build
 ```
 
-21 tests currently pass.
+Retrieval / agent evaluation runners live under `evals/` (see commands in
+[`docs/architecture.md`](docs/architecture.md)).
 
-### Retrieval evaluation
+---
 
-```bash
-cd ~/Desktop/enterprise-agentic-ai-platform &&
-PYTHONPATH=backend uv run --project backend --env-file backend/.env.development python -m evals.retrieval.run_evaluation
-```
+## Deployment
 
-Results are written to `evals/results/retrieval_results.json`.
-
-The current golden set is intentionally small (15 queries) and should not be
-treated as a large-scale production benchmark.
-
-### Agent evaluation
-
-24-case golden dataset at `evals/agent/golden_dataset.json` covering knowledge,
-SQL, MCP/tool, HITL write actions, and unsupported requests.
-
-Router-only evaluation:
-
-```bash
-cd ~/Desktop/enterprise-agentic-ai-platform &&
-PYTHONPATH=backend uv run --project backend --env-file backend/.env.development python -m evals.agent.run_router_evaluation
-```
-
-End-to-end agent evaluation (with Langfuse tracing):
-
-```bash
-cd ~/Desktop/enterprise-agentic-ai-platform &&
-PYTHONPATH=backend uv run --project backend --env-file backend/.env.development python -m evals.agent.run_agent_evaluation
-```
-
-Results are written to `evals/results/agent_evaluation.json`.
-
-Current regression benchmark on this small dataset: **24/24** route accuracy,
-**24/24** approval accuracy, **24/24** execution success, **24/24** end-to-end
-pass rate. These are local regression results — not production-wide accuracy claims.
-
-## Code Quality
-
-```bash
-cd backend
-uv run ruff check app tests
-uv run ruff format --check app tests
-uv run ruff format app tests
-```
-
-## CI
-
-GitHub Actions runs on pushes and pull requests to `master` and `main`.
+**Backend**
 
 ```text
-backend job: dependency install → Ruff lint → Ruff format check → pytest
-backend-image job: Docker build only (no push, no Azure credentials)
+GitHub → GitHub Actions → Docker build → GHCR (latest + SHA tags)
+  → Azure Container Apps (currently updated manually / planned OIDC CD)
 ```
 
-## Production packaging (Sprint 8 Phase 8A)
+**Frontend**
 
-Backend container image (build from **repository root** so MCP is included):
-
-```bash
-docker build -f backend/Dockerfile -t enterprise-agentic-ai-backend .
+```text
+GitHub → Azure Static Web Apps workflow → Vite build → Static Web Apps
 ```
 
-- Image runs uvicorn on `0.0.0.0:${PORT:-8000}`
-- Same container includes the stdio MCP server under `/app/mcp`
-- Linux image uses **CPU-only PyTorch** (no CUDA/NVIDIA wheels)
-- Secrets are injected at runtime via environment variables (see `backend/.env.example`)
-- `/health` is liveness-compatible; `/ready` requires PostgreSQL and Qdrant.
-  Redis is reported and may mark the app `degraded` without returning 503,
-  because RAG cache and agent rate limiting fail open.
-- Redis / Upstash: short-lived tenant-aware RAG response caching and
-  lightweight agent rate limiting only (not application state or checkpoints)
-- Azure OpenAI and Langfuse are **not** required for process liveness
-- Frontend production builds use `VITE_API_BASE_URL` at build time
-- Container-local document storage (`DOCUMENT_STORAGE_PATH`) is **not** durable —
-  production object storage (Azure Blob) is Phase 8B
-- No new application-hosting Azure resources were provisioned in Phase 8A.
-  Existing Azure AI Foundry, Application Insights, and Log Analytics resources
-  remain in use. The FastAPI backend and React frontend have not yet been
-  deployed to Azure.
+Production topology: ACA backend · SWA frontend · Neon · Qdrant Cloud ·
+Upstash · Azure OpenAI / Foundry · Langfuse.
 
-Phase 8B cost target: ~$0 fixed monthly (Static Web Apps Free, Container Apps
-scale-to-zero, Neon/Qdrant/Upstash free tiers). Avoid AKS, GPU, always-on
-compute, and paid managed databases for this portfolio demo.
+---
 
-Preparation for Phase 8B is documented in [`docs/phase-8b-runbook.md`](docs/phase-8b-runbook.md)
-(checkpointer config, Neon migrations, ACA/SWA steps). **No new hosting/data
-resources have been provisioned yet.**
+## CI/CD
+
+| Workflow | Behavior |
+|----------|----------|
+| `backend-ci.yml` | Ruff lint · Ruff format check · pytest · Docker **build-only** validation |
+| `backend-image.yml` | Build/push backend image to **GHCR** (`latest` + immutable SHA) |
+| `azure-static-web-apps-*.yml` | Build/deploy frontend to **Static Web Apps** |
+
+**Important:** pushing to `master` publishes a backend image to GHCR and can
+deploy the frontend via SWA, but **full Container Apps CD automation
+(Azure OIDC → new revision) is still planned**. `git push` does **not**
+automatically update Container Apps unless that workflow is added and wired.
+
+Planned backend CD: tests → image → GHCR → Azure OIDC → Container Apps revision.
+
+---
+
+## Current Status
+
+| Area | Status |
+|------|--------|
+| Sprints 0–7 | Complete |
+| Sprint 8 cloud hosting | Largely complete (ACA, SWA, Neon, Qdrant Cloud, Upstash, Postgres checkpoints, playground) |
+| Backend GHCR publish | Complete |
+| Backend ACA auto-deploy | Planned / pending |
+| Latest local frontend UX polish | Implemented in working tree; not claimed live until commit + SWA deploy |
+
+Feature scope for the core platform is largely sufficient. Near-term priority
+is deployment reliability, backend CD automation, docs/demo polish, and
+evidence — not new AI frameworks.
+
+---
+
 ## Roadmap
 
-### Completed
+1. Backend full CD (GitHub Actions + Azure OIDC → Container Apps)
+2. Commit/deploy latest playground UX polish + smoke test production
+3. Portfolio evidence (screenshots, short demo video, CV bullets)
+4. Optional: Azure Blob durable document storage
+5. Future: multimodal manufacturing demo; AI code-review agent (see project plan)
 
-- **Sprint 0** — Repository & architecture foundation
-- **Sprint 1** — Enterprise knowledge ingestion & RAG v1
-- **Sprint 2** — Advanced retrieval & evaluation
-- **Sprint 3** — LangGraph agent orchestration (router graph)
-- **Sprint 4** — MCP & enterprise tool integration
-- **Sprint 5** — SQL agent, SQL security & human-in-the-loop
-- **Sprint 6** — Evaluation, Langfuse & production observability
-- **Sprint 7** — React chat UI & production UX
+---
 
-### In progress
+## Important Limitations
 
-- **Sprint 8** — Azure deployment & CI/CD
-  - Phase 8A (packaging) complete
-  - Phase 8B (Azure provision / deploy) not started
+- Public demo uses seeded **synthetic** enterprise data
+- MCP integrations are **demo/simulated**, not a real CMMS/ERP
+- Evaluation datasets are intentionally **small**
+- Uploaded-file storage is **not** durable Blob Storage
+- No full public authentication / RBAC product layer
+- ACA `minReplicas=0` introduces **cold starts**
+- Cost controls reduce risk; they do not guarantee zero spend
 
-### Planned
-
-- **Sprint 9–10** — Multimodal demo, portfolio polish
-
-Production deployment, persistent checkpoint storage, JWT/RBAC, and persistent
-chat history are not complete.
-
-### Screenshots
-
-Screenshots of the chat UI are not committed in this repository. Capture locally
-after running `npm run dev` in `frontend/`.
+---
 
 ## Design Principles
 
-- Multi-tenancy and explicit tenant boundaries
-- Async I/O and database migrations
-- Testability and CI enforcement
+- Explicit tenant boundaries at every data plane
 - Measurable retrieval and agent quality
-- Langfuse observability for agent debugging
-- Secure SQL execution and human approval for sensitive write actions
-- Reproducible local development
+- Human approval for sensitive writes
+- PostgreSQL as relational source of truth; Qdrant as retrieval index
+- Secrets out of Git; CI green before advancing
 
 ## License
 

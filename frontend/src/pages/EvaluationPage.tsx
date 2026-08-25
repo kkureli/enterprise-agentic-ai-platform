@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { fetchEvaluations, type DemoEvaluations } from '../api/demo'
+import { ErrorBlock, LoadingBlock } from '../components/AsyncState'
+
+type LoadStatus = 'loading' | 'success' | 'error'
 
 function pct(value: number): string {
   return `${(value * 100).toFixed(1)}%`
@@ -9,43 +12,26 @@ function pct(value: number): string {
 export function EvaluationPage() {
   const [data, setData] = useState<DemoEvaluations | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState<LoadStatus>('loading')
 
-  useEffect(() => {
-    let cancelled = false
+  const load = useCallback(async () => {
+    setStatus('loading')
+    setError(null)
 
-    async function load() {
-      setLoading(true)
-      setError(null)
-      try {
-        const payload = await fetchEvaluations()
-        if (!cancelled) {
-          setData(payload)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load evaluations.')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void load()
-    return () => {
-      cancelled = true
+    try {
+      const payload = await fetchEvaluations()
+      setData(payload)
+      setStatus('success')
+    } catch (err) {
+      setData(null)
+      setStatus('error')
+      setError(err instanceof Error ? err.message : 'Failed to load evaluations.')
     }
   }, [])
 
-  if (loading) {
-    return <p className="page-note">Loading evaluation metrics…</p>
-  }
-
-  if (error || !data) {
-    return <p className="page-error">{error ?? 'Evaluation metrics unavailable.'}</p>
-  }
+  useEffect(() => {
+    void load()
+  }, [load])
 
   return (
     <div className="evaluation-page">
@@ -56,59 +42,73 @@ export function EvaluationPage() {
         </p>
       </header>
 
-      <p className="page-note">{data.disclaimer}</p>
+      {status === 'loading' ? (
+        <LoadingBlock title="Loading evaluation metrics…" compact />
+      ) : null}
 
-      <section className="eval-section">
-        <h3 className="eval-section__title">Agent Evaluation</h3>
-        <p className="page-note">Dataset size: {data.agent.total_cases} cases</p>
-        <div className="metric-grid">
-          <article className="metric-card">
-            <h4>Route Accuracy</h4>
-            <p className="metric-card__value">{pct(data.agent.route_accuracy)}</p>
-          </article>
-          <article className="metric-card">
-            <h4>Approval Accuracy</h4>
-            <p className="metric-card__value">{pct(data.agent.approval_accuracy)}</p>
-          </article>
-          <article className="metric-card">
-            <h4>Execution Success</h4>
-            <p className="metric-card__value">{pct(data.agent.execution_success_rate)}</p>
-          </article>
-          <article className="metric-card">
-            <h4>Workflow Pass</h4>
-            <p className="metric-card__value">{pct(data.agent.end_to_end_pass_rate)}</p>
-          </article>
-        </div>
-      </section>
+      {status === 'error' ? (
+        <ErrorBlock
+          title="Unable to load evaluation metrics."
+          message={error}
+          onRetry={() => void load()}
+        />
+      ) : null}
 
-      <section className="eval-section">
-        <h3 className="eval-section__title">Retrieval Evaluation</h3>
-        <p className="page-note">
-          Dataset size: {data.retrieval.num_queries} queries · k={data.retrieval.eval_k}
-        </p>
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Strategy</th>
-                <th>Recall@{data.retrieval.eval_k}</th>
-                <th>MRR</th>
-                <th>nDCG@{data.retrieval.eval_k}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.retrieval.strategies.map((strategy) => (
-                <tr key={strategy.name}>
-                  <td>{strategy.name}</td>
-                  <td>{pct(strategy.recall_at_k)}</td>
-                  <td>{strategy.mrr.toFixed(3)}</td>
-                  <td>{strategy.ndcg_at_k.toFixed(3)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      {status === 'success' && data ? (
+        <>
+          <p className="eval-disclaimer">{data.disclaimer}</p>
+
+          <section className="eval-section">
+            <div className="metric-grid">
+              <article className="metric-card">
+                <h4>Route Accuracy</h4>
+                <p className="metric-card__value">{pct(data.agent.route_accuracy)}</p>
+              </article>
+              <article className="metric-card">
+                <h4>Approval Accuracy</h4>
+                <p className="metric-card__value">{pct(data.agent.approval_accuracy)}</p>
+              </article>
+              <article className="metric-card">
+                <h4>Workflow Pass</h4>
+                <p className="metric-card__value">{pct(data.agent.end_to_end_pass_rate)}</p>
+              </article>
+              <article className="metric-card">
+                <h4>Retrieval Queries</h4>
+                <p className="metric-card__value">{data.retrieval.num_queries}</p>
+              </article>
+            </div>
+          </section>
+
+          <section className="eval-section">
+            <h3 className="eval-section__title">Retrieval strategy comparison</h3>
+            <p className="page-note">
+              Agent cases: {data.agent.total_cases} · k={data.retrieval.eval_k}
+            </p>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Strategy</th>
+                    <th>Recall@{data.retrieval.eval_k}</th>
+                    <th>MRR</th>
+                    <th>nDCG@{data.retrieval.eval_k}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.retrieval.strategies.map((strategy) => (
+                    <tr key={strategy.name}>
+                      <td>{strategy.name}</td>
+                      <td>{pct(strategy.recall_at_k)}</td>
+                      <td>{strategy.mrr.toFixed(3)}</td>
+                      <td>{strategy.ndcg_at_k.toFixed(3)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      ) : null}
     </div>
   )
 }
