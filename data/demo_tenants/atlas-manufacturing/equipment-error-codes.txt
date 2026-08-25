@@ -1,0 +1,32 @@
+Atlas Manufacturing — Equipment Error Codes
+==========================================
+
+This document defines tenant-specific equipment fault codes for Atlas
+Manufacturing production assets. Always resolve the active code before
+returning equipment to production.
+
+E-100
+Lubrication pressure below safe operating threshold.
+Inspect lubrication pump, oil level, pressure sensor, and supply lines.
+Equipment must not resume production until pressure is stable.
+
+AX-4317
+Hydraulic pressure loss.
+Inspect hydraulic circuit, pressure sensor, reservoir level, and visible leaks.
+Restart requires technician verification.
+
+AX-2204
+CNC spindle temperature above operating threshold.
+Stop machining cycle and inspect coolant flow and spindle lubrication.
+
+RB-2201
+Robot joint torque deviation.
+Place robot cell in maintenance mode and inspect joint drive and encoder.
+
+AX-1180
+Press cycle timeout.
+Verify press stroke sensors, interlock state, and operator start sequence.
+
+RB-0904
+Weld torch gas flow low.
+Inspect shielding gas supply, regulators, and torch hose connections.

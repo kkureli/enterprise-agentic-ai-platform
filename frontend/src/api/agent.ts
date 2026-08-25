@@ -3,11 +3,13 @@ import type { AgentResponse, RetrievalMode } from '../types/agent'
 
 export class AgentApiError extends Error {
   status: number
+  retryAfter?: number
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, retryAfter?: number) {
     super(message)
     this.name = 'AgentApiError'
     this.status = status
+    this.retryAfter = retryAfter
   }
 }
 
@@ -42,7 +44,14 @@ async function parseAgentResponse(response: Response): Promise<AgentResponse> {
         ? payload.detail
         : 'Request failed.'
 
-    throw new AgentApiError(mapHttpError(detail, response.status), response.status)
+    const retryHeader = response.headers.get('Retry-After')
+    const retryAfter = retryHeader ? Number(retryHeader) : undefined
+
+    throw new AgentApiError(
+      mapHttpError(detail, response.status, retryAfter),
+      response.status,
+      Number.isFinite(retryAfter) ? retryAfter : undefined,
+    )
   }
 
   if (
@@ -59,7 +68,7 @@ async function parseAgentResponse(response: Response): Promise<AgentResponse> {
   return payload as AgentResponse
 }
 
-function mapHttpError(detail: string, status: number): string {
+function mapHttpError(detail: string, status: number, retryAfter?: number): string {
   if (status === 404) {
     return 'Tenant not found. Verify your tenant ID.'
   }
@@ -68,11 +77,22 @@ function mapHttpError(detail: string, status: number): string {
     return 'This approval request is no longer pending.'
   }
 
+  if (status === 429) {
+    if (retryAfter && Number.isFinite(retryAfter)) {
+      return `Demo request limit reached. Try again in ${retryAfter} seconds.`
+    }
+    return detail || 'Rate limit exceeded. Try again shortly.'
+  }
+
   if (status === 503) {
     return detail || 'Agent execution failed. Please try again.'
   }
 
   if (status === 422) {
+    return detail || 'Invalid request.'
+  }
+
+  if (status === 400) {
     return detail || 'Invalid request.'
   }
 

@@ -1,7 +1,9 @@
 import json
+import time
 
 from langchain_core.messages import ToolMessage
 
+from app.agents.execution_trace import node_trace, safe_result_preview
 from app.agents.state import AgentState
 from app.services.llm_service import get_chat_model
 from app.services.mcp_client import (
@@ -12,6 +14,8 @@ from app.services.mcp_client import (
 APPROVAL_REQUIRED_TOOLS = {
     "create_maintenance_ticket",
 }
+
+MCP_SERVER_NAME = "maintenance"
 
 SYSTEM_PROMPT = """
 You are an enterprise operations assistant.
@@ -62,7 +66,17 @@ async def mcp_tool_node(state: AgentState) -> dict:
         return {
             "tool_answer": (
                 "The request requires an operational tool, but no appropriate tool was selected."
-            )
+            ),
+            **node_trace(
+                "tool",
+                route="tool",
+                tools={
+                    "mcp_server": MCP_SERVER_NAME,
+                    "tool_name": None,
+                    "tool_type": "read",
+                    "result_preview": "No tool selected.",
+                },
+            ),
         }
 
     tool_call = tool_request.tool_calls[0]
@@ -72,20 +86,44 @@ async def mcp_tool_node(state: AgentState) -> dict:
     if tool_call["name"] not in allowed_tools:
         raise RuntimeError(f"Unknown MCP tool requested: {tool_call['name']}")
 
+    safe_args = tool_call["args"] if isinstance(tool_call["args"], dict) else {}
+
     if tool_call["name"] in APPROVAL_REQUIRED_TOOLS:
         return {
             "requires_approval": True,
             "pending_action": {
                 "tool_name": tool_call["name"],
-                "arguments": tool_call["args"],
+                "arguments": safe_args,
             },
             "tool_answer": ("This action requires human approval before execution."),
+            **node_trace(
+                "tool",
+                route="tool",
+                tools={
+                    "mcp_server": MCP_SERVER_NAME,
+                    "tool_name": tool_call["name"],
+                    "arguments": safe_args,
+                    "tool_type": "write",
+                    "requires_approval": True,
+                    "approval_status": "pending",
+                },
+                hitl={
+                    "required": True,
+                    "approved": None,
+                    "pending_action": {
+                        "tool_name": tool_call["name"],
+                        "arguments": safe_args,
+                    },
+                },
+            ),
         }
 
+    tool_started = time.perf_counter()
     result = await call_maintenance_tool(
         tool_call["name"],
-        tool_call["args"],
+        safe_args,
     )
+    tool_ms = round((time.perf_counter() - tool_started) * 1000, 2)
 
     tool_result = result.structured_content
 
@@ -104,4 +142,18 @@ async def mcp_tool_node(state: AgentState) -> dict:
 
     return {
         "tool_answer": str(final_response.content),
+        **node_trace(
+            "tool",
+            route="tool",
+            tools={
+                "mcp_server": MCP_SERVER_NAME,
+                "tool_name": tool_call["name"],
+                "arguments": safe_args,
+                "result_preview": safe_result_preview(tool_result),
+                "tool_type": "read",
+                "execution_duration_ms": tool_ms,
+                "requires_approval": False,
+            },
+            timing={"tool_execution_ms": tool_ms},
+        ),
     }

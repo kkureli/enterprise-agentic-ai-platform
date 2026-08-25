@@ -1,5 +1,8 @@
+import time
+
 from pydantic import BaseModel
 
+from app.agents.execution_trace import node_trace
 from app.agents.state import AgentRoute, AgentState
 from app.services.llm_service import get_chat_model
 
@@ -86,6 +89,8 @@ Return only the structured routing decision.
 
 
 async def router_node(state: AgentState) -> dict:
+    started = time.perf_counter()
+
     model = get_chat_model().with_structured_output(RouteDecision)
 
     result = await model.ainvoke(
@@ -95,6 +100,13 @@ async def router_node(state: AgentState) -> dict:
         ]
     )
 
+    router_ms = round((time.perf_counter() - started) * 1000, 2)
+
     return {
         "route": result.route,
+        **node_trace(
+            "router",
+            route=result.route,
+            timing={"router_ms": router_ms},
+        ),
     }

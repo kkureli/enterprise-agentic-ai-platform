@@ -83,7 +83,13 @@ def build_rag_cache_key(
 
 
 def _serialize_rag_result(result: "RagResult") -> str:
-    return json.dumps(asdict(result))
+    return json.dumps(
+        {
+            "answer": result.answer,
+            "sources": [asdict(source) for source in result.sources],
+            "retrieved_chunks": [asdict(chunk) for chunk in result.retrieved_chunks],
+        }
+    )
 
 
 def _deserialize_rag_result(payload: str) -> "RagResult":
@@ -93,8 +99,27 @@ def _deserialize_rag_result(payload: str) -> "RagResult":
 
     return RagResult(
         answer=data["answer"],
-        sources=[RagSource(**source) for source in data.get("sources", [])],
-        retrieved_chunks=[RagRetrievedChunk(**chunk) for chunk in data.get("retrieved_chunks", [])],
+        sources=[
+            RagSource(
+                **{
+                    key: value
+                    for key, value in source.items()
+                    if key in RagSource.__dataclass_fields__
+                }
+            )
+            for source in data.get("sources", [])
+        ],
+        retrieved_chunks=[
+            RagRetrievedChunk(
+                **{
+                    key: value
+                    for key, value in chunk.items()
+                    if key in RagRetrievedChunk.__dataclass_fields__
+                }
+            )
+            for chunk in data.get("retrieved_chunks", [])
+        ],
+        cache_hit=False,
     )
 
 

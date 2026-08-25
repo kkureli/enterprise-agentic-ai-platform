@@ -8,8 +8,13 @@ from app.services.rag_cache_service import (
     get_cached_rag_result,
     set_cached_rag_result,
 )
-from app.services.rag_retrieval_service import RetrievalMode, retrieve_for_rag_mode
-from app.services.retrieval_service import RetrievalFilters, RetrievedChunk
+from app.services.rag_retrieval_service import (
+    RetrievalMode,
+    RetrievalRunResult,
+    RetrievedChunkDetail,
+    retrieve_for_rag_mode,
+)
+from app.services.retrieval_service import RetrievalFilters
 
 SYSTEM_PROMPT = """
 You are an enterprise knowledge assistant.
@@ -38,6 +43,10 @@ class RagSource:
     filename: str
     chunk_index: int
     score: float
+    retrieval_score: float | None = None
+    rerank_score: float | None = None
+    retrieval_method: str | None = None
+    text: str = ""
 
 
 @dataclass
@@ -47,6 +56,9 @@ class RagRetrievedChunk:
     chunk_index: int
     score: float
     text: str
+    retrieval_score: float | None = None
+    rerank_score: float | None = None
+    retrieval_method: str | None = None
 
 
 @dataclass
@@ -54,9 +66,12 @@ class RagResult:
     answer: str
     sources: list[RagSource]
     retrieved_chunks: list[RagRetrievedChunk]
+    cache_hit: bool = False
+    retrieval: RetrievalRunResult | None = None
+    llm_generation_ms: float | None = None
 
 
-def build_context(chunks: list[RetrievedChunk]) -> str:
+def build_context(chunks: list[RetrievedChunkDetail]) -> str:
     return "\n\n".join(
         (
             f"[Source {index}]\n"
@@ -68,6 +83,22 @@ def build_context(chunks: list[RetrievedChunk]) -> str:
     )
 
 
+def _to_rag_chunks(chunks: list[RetrievedChunkDetail]) -> list[RagRetrievedChunk]:
+    return [
+        RagRetrievedChunk(
+            document_id=chunk.document_id,
+            filename=chunk.filename,
+            chunk_index=chunk.chunk_index,
+            score=chunk.score,
+            text=chunk.text,
+            retrieval_score=chunk.retrieval_score,
+            rerank_score=chunk.rerank_score,
+            retrieval_method=chunk.retrieval_method,
+        )
+        for chunk in chunks
+    ]
+
+
 async def answer_question(
     tenant_id: UUID,
     question: str,
@@ -75,6 +106,8 @@ async def answer_question(
     filters: RetrievalFilters | None = None,
     retrieval_mode: RetrievalMode = "standard",
 ) -> RagResult:
+    import time
+
     cached = await get_cached_rag_result(
         tenant_id=tenant_id,
         question=question,
@@ -84,9 +117,10 @@ async def answer_question(
     )
 
     if cached is not None:
+        cached.cache_hit = True
         return cached
 
-    chunks = await retrieve_for_rag_mode(
+    run = await retrieve_for_rag_mode(
         tenant_id=tenant_id,
         query=question,
         limit=limit,
@@ -94,11 +128,15 @@ async def answer_question(
         mode=retrieval_mode,
     )
 
+    chunks = run.chunks
+
     if not chunks:
         result = RagResult(
             answer=("The provided documents do not contain enough information."),
             sources=[],
             retrieved_chunks=[],
+            cache_hit=False,
+            retrieval=run,
         )
         await set_cached_rag_result(
             tenant_id=tenant_id,
@@ -122,12 +160,14 @@ Context:
 
     model = get_chat_model().with_structured_output(GroundedAnswer)
 
+    llm_started = time.perf_counter()
     grounded = await model.ainvoke(
         [
             ("system", SYSTEM_PROMPT),
             ("human", user_prompt),
         ]
     )
+    llm_generation_ms = round((time.perf_counter() - llm_started) * 1000, 2)
 
     valid_source_ids: list[int] = []
 
@@ -147,24 +187,20 @@ Context:
                 filename=chunk.filename,
                 chunk_index=chunk.chunk_index,
                 score=chunk.score,
+                retrieval_score=chunk.retrieval_score,
+                rerank_score=chunk.rerank_score,
+                retrieval_method=chunk.retrieval_method,
+                text=chunk.text,
             )
         )
-
-    retrieved_chunks = [
-        RagRetrievedChunk(
-            document_id=chunk.document_id,
-            filename=chunk.filename,
-            chunk_index=chunk.chunk_index,
-            score=chunk.score,
-            text=chunk.text,
-        )
-        for chunk in chunks
-    ]
 
     result = RagResult(
         answer=grounded.answer,
         sources=sources,
-        retrieved_chunks=retrieved_chunks,
+        retrieved_chunks=_to_rag_chunks(chunks),
+        cache_hit=False,
+        retrieval=run,
+        llm_generation_ms=llm_generation_ms,
     )
 
     await set_cached_rag_result(

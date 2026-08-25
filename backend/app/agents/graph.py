@@ -15,29 +15,40 @@ def route_after_router(state: AgentState) -> AgentRoute:
 
 
 def finalize_node(state: AgentState) -> dict:
+    from app.agents.execution_trace import node_trace
+
     route = state["route"]
 
     if route == "knowledge":
         return {
             "final_answer": state["rag_answer"],
+            **node_trace("finalize"),
         }
 
     if route == "sql":
         return {
             "final_answer": state["sql_answer"],
+            **node_trace("finalize"),
         }
 
     if route == "tool":
         return {
             "final_answer": state["tool_answer"],
+            **node_trace("finalize"),
         }
 
     raise ValueError(f"Unsupported finalize route: {route}")
 
 
 def fallback_node(state: AgentState) -> dict:
+    from app.agents.execution_trace import node_trace
+
     return {
         "final_answer": "This request is not supported yet.",
+        **node_trace(
+            "fallback",
+            route="unsupported",
+        ),
     }
 
 

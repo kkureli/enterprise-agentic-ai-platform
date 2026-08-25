@@ -16,6 +16,19 @@ class Settings(BaseSettings):
     rag_cache_ttl_seconds: int = 300
     agent_rate_limit_requests: int = 30
     agent_rate_limit_window_seconds: int = 60
+
+    public_demo_mode: bool = False
+    client_rate_limit_requests: int = 10
+    client_rate_limit_window_seconds: int = 60
+    global_ai_rate_limit_requests: int = 100
+    global_ai_rate_limit_window_seconds: int = 3600
+    demo_daily_ai_request_limit: int = 500
+    max_agent_question_chars: int = 2000
+    compare_rate_limit_requests: int = 3
+    compare_rate_limit_window_seconds: int = 300
+    demo_write_rate_limit_requests: int = 5
+    demo_write_rate_limit_window_seconds: int = 3600
+
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None
 
@@ -65,6 +78,12 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
+
+    # Optional playground cost estimates (USD per 1M tokens). Defaults are
+    # approximate gpt-4.1-mini list prices for portfolio display only.
+    llm_input_cost_per_1m_tokens: float = 0.40
+    llm_output_cost_per_1m_tokens: float = 1.60
+    embedding_cost_per_1m_tokens: float = 0.02
 
 
 @lru_cache

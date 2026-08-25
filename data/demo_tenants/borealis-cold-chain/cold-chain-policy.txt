@@ -1,0 +1,24 @@
+Borealis Cold Chain — Cold Chain Policy
+=======================================
+
+Frozen storage target:
+-18°C or lower
+
+Chilled storage:
+2°C to 8°C
+
+Temperature excursion > 15 minutes:
+requires incident review.
+
+High-severity refrigeration alarms:
+response within 15 minutes.
+
+Products exposed outside approved temperature range must be quarantined until
+quality review.
+
+Dock doors should remain open only for active loading or unloading. Continuous
+open-door conditions that threaten zone temperature must trigger escalation to
+the shift supervisor and refrigeration technician.
+
+All critical refrigeration faults must be logged with asset code, zone, and
+observed temperature trend before clearing the alarm.

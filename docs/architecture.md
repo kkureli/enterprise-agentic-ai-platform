@@ -603,10 +603,16 @@ Current responsibility:
 
 ### Redis
 
-Used for short-lived, tenant-aware application optimizations:
+Used for short-lived, tenant-aware application optimizations and public-demo
+cost protection:
 
 - RAG response caching (knowledge answers only; TTL ≈ 5 minutes)
-- Lightweight fixed-window agent rate limiting (`POST .../agent`)
+- Per-tenant agent rate limiting (`POST .../agent`)
+- Per-client (hashed IP) rate limiting
+- Global hourly AI execution ceiling
+- Hard daily demo AI request budget (`demo_budget:ai_requests:{UTC_DATE}`)
+- Compare Runs stricter limit
+- Approved write-action rate limiting
 
 Redis is **not** used for:
 
@@ -619,10 +625,16 @@ Cache keys are versioned per tenant (`rag_version:{tenant_id}`). Successful
 document ingestion increments the version so prior RAG cache entries become
 logically stale without SCAN/delete-by-prefix.
 
-Both features **fail open / degrade gracefully** when Redis is unavailable:
-RAG continues without cache; agent requests are allowed without rate limiting.
-Stricter production environments may fail closed or enforce limits at an API
-gateway.
+**Failure policy:**
+
+- Ordinary rate limits and RAG cache **fail open** when Redis is unavailable
+  (local / non-demo usability).
+- When `PUBLIC_DEMO_MODE=true`, the hard daily AI budget **fails closed** so a
+  Redis outage cannot remove the final cost ceiling.
+
+Application-level controls reduce abuse risk but are not a substitute for Azure
+subscription budgets/alerts.
+
 ### Qdrant
 
 Current responsibility:
@@ -692,7 +704,9 @@ FastAPI / LangGraph
 │   └── vector retrieval
 ├── Redis / Upstash
 │   ├── RAG cache
-│   └── agent rate limiting
+│   ├── tenant + client rate limiting
+│   ├── global hourly AI ceiling
+│   └── hard daily demo budget
 └── Azure OpenAI / Foundry
 ```
 

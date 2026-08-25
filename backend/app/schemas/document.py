@@ -16,3 +16,16 @@ class DocumentRead(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+
+
+class DocumentChunkRead(BaseModel):
+    chunk_index: int
+    text: str
+    filename: str
+    document_id: str
+
+
+class DocumentInspectRead(BaseModel):
+    document: DocumentRead
+    chunks: list[DocumentChunkRead]
+    note: str = "Indexed content / chunks"

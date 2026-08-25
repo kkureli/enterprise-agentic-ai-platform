@@ -1,0 +1,28 @@
+Helios Energy Services — Renewable Site Inspection Plan
+=======================================================
+
+Wind turbine monthly inspection
+- nacelle visual inspection
+- yaw system function check
+- safety system verification
+
+Gearbox oil inspection
+- oil level and condition check monthly
+- oil sampling on the planned quarterly interval
+
+Blade visual checks
+- leading-edge and tip condition from ground or drone survey
+- lightning receptor inspection when accessible
+
+Inverter checks
+- enclosure temperature and ventilation
+- DC and AC connection torque audit quarterly
+- communications health with the site controller
+
+Transformer inspection
+- thermal scan quarterly
+- oil level and bushing visual check monthly
+
+Communications health checks
+- gateway connectivity daily remote check
+- failover path verification monthly

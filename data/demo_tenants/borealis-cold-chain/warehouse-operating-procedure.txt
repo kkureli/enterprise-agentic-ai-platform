@@ -1,0 +1,23 @@
+Borealis Cold Chain — Warehouse Operating Procedure
+===================================================
+
+Door-open limits
+- chilled and frozen zone doors must not remain open beyond the loading cycle
+- if zone temperature rises outside policy, stop loading and escalate
+
+Loading dock procedures
+- verify dock seal integrity before opening the cold-zone door
+- stage product transfer to minimize exposure time
+- close dock doors immediately after trailer disconnect
+
+Alarm escalation
+- high-severity refrigeration alarms require response within 15 minutes
+- unresolved alarms after 30 minutes escalate to the facilities manager
+
+Temperature logging
+- automated sensor logs are reviewed each shift
+- manual probe checks are required after any E-100 or CL-402 event
+
+Manual inspection rules
+- inspect seals, drains, and evaporator icing at the start of each shift
+- quarantine product when exposure exceeds approved ranges

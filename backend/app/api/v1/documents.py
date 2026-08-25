@@ -3,22 +3,87 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.document import Document
 from app.models.tenant import Tenant
-from app.schemas.document import DocumentRead
+from app.schemas.document import (
+    DocumentChunkRead,
+    DocumentInspectRead,
+    DocumentRead,
+)
 from app.services.document_ingestion import ingest_document
 from app.services.document_parser import DocumentParseError
 from app.services.document_storage import save_document_file
 from app.services.rag_cache_service import increment_rag_cache_version
+from app.services.vector_store import list_document_chunks
 
 router = APIRouter(
     prefix="/tenants/{tenant_id}/documents",
     tags=["Documents"],
 )
+
+
+@router.get(
+    "",
+    response_model=list[DocumentRead],
+)
+async def list_documents(
+    tenant_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[Document]:
+    tenant = await db.get(Tenant, tenant_id)
+
+    if tenant is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant not found.",
+        )
+
+    result = await db.execute(
+        select(Document).where(Document.tenant_id == tenant_id).order_by(Document.filename.asc())
+    )
+
+    return list(result.scalars().all())
+
+
+@router.get(
+    "/{document_id}",
+    response_model=DocumentInspectRead,
+)
+async def inspect_document(
+    tenant_id: UUID,
+    document_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> DocumentInspectRead:
+    tenant = await db.get(Tenant, tenant_id)
+
+    if tenant is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant not found.",
+        )
+
+    document = await db.get(Document, document_id)
+
+    if document is None or document.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found.",
+        )
+
+    chunks = await list_document_chunks(
+        tenant_id=tenant_id,
+        document_id=document_id,
+    )
+
+    return DocumentInspectRead(
+        document=DocumentRead.model_validate(document),
+        chunks=[DocumentChunkRead(**chunk) for chunk in chunks],
+    )
 
 
 @router.post(

@@ -1,21 +1,38 @@
 import logging
+import time
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from langfuse.langchain import CallbackHandler
 from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.execution_trace import (
+    TokenUsageCallback,
+    build_execution_details,
+    merge_execution_details,
+)
 from app.agents.graph import agent_graph
+from app.api.v1.limits import raise_limit_error
 from app.db.session import get_db
 from app.models.tenant import Tenant
 from app.schemas.agent import (
     AgentApprovalRequest,
+    AgentCompareRequest,
+    AgentCompareResponse,
     AgentRequest,
     AgentResponse,
 )
-from app.services.rate_limit_service import check_agent_rate_limit
+from app.services.client_identity import client_ip_from_request, hash_client_id
+from app.services.rate_limit_service import (
+    check_client_rate_limit,
+    check_compare_rate_limit,
+    check_daily_ai_budget,
+    check_global_ai_rate_limit,
+    check_tenant_rate_limit,
+    check_write_rate_limit,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,72 +42,20 @@ router = APIRouter(
 )
 
 
-@router.post(
-    "",
-    response_model=AgentResponse,
-)
-async def run_agent(
-    tenant_id: UUID,
-    payload: AgentRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
+def _response_from_result(
+    *,
+    thread_id: str,
+    result: dict,
+    usage: TokenUsageCallback,
+    total_ms: float,
 ) -> AgentResponse:
-    tenant = await db.get(
-        Tenant,
-        tenant_id,
+    details = build_execution_details(
+        result.get("execution_details"),
+        route=result.get("route"),
+        usage=usage,
+        total_ms=total_ms,
+        observability_id=thread_id,
     )
-
-    if tenant is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Tenant not found.",
-        )
-
-    allowed = await check_agent_rate_limit(tenant_id)
-
-    if not allowed:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rate limit exceeded. Try again shortly.",
-        )
-
-    thread_id = str(uuid4())
-    langfuse_handler = CallbackHandler()
-    config = {
-        "configurable": {
-            "thread_id": thread_id,
-        },
-        "callbacks": [
-            langfuse_handler,
-        ],
-        "run_name": "enterprise-agent",
-        "metadata": {
-            "thread_id": thread_id,
-            "tenant_id": str(tenant_id),
-            "retrieval_mode": payload.retrieval_mode,
-        },
-    }
-
-    try:
-        result = await agent_graph.ainvoke(
-            {
-                "tenant_id": tenant_id,
-                "query": payload.question,
-                "retrieval_mode": payload.retrieval_mode,
-            },
-            config=config,
-        )
-
-    except Exception as exc:
-        logger.exception(
-            "Agent execution failed for tenant=%s thread_id=%s",
-            tenant_id,
-            thread_id,
-        )
-
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Agent execution failed.",
-        ) from exc
 
     interrupts = result.get("__interrupt__")
 
@@ -101,6 +66,7 @@ async def run_agent(
             route=result["route"],
             answer=result["tool_answer"],
             pending_action=result["pending_action"],
+            execution_details=details,
         )
 
     return AgentResponse(
@@ -108,6 +74,169 @@ async def run_agent(
         status="completed",
         route=result["route"],
         answer=result["final_answer"],
+        execution_details=details,
+    )
+
+
+async def _enforce_ai_request_limits(
+    *,
+    request: Request,
+    tenant_id: UUID,
+    units: int = 1,
+    compare: bool = False,
+) -> str:
+    client_hash = hash_client_id(client_ip_from_request(request))
+
+    if compare:
+        decision = await check_compare_rate_limit(client_hash)
+        if not decision.allowed:
+            raise_limit_error(decision)
+
+    for checker in (
+        lambda: check_client_rate_limit(client_hash, units=units),
+        lambda: check_tenant_rate_limit(tenant_id, units=units),
+        lambda: check_global_ai_rate_limit(units=units),
+        lambda: check_daily_ai_budget(units=units),
+    ):
+        decision = await checker()
+        if not decision.allowed:
+            raise_limit_error(decision)
+
+    return client_hash
+
+
+async def _invoke_agent(
+    *,
+    tenant_id: UUID,
+    question: str,
+    retrieval_mode: str,
+    run_name: str,
+) -> AgentResponse:
+    thread_id = str(uuid4())
+    langfuse_handler = CallbackHandler()
+    usage_callback = TokenUsageCallback()
+    config = {
+        "configurable": {
+            "thread_id": thread_id,
+        },
+        "callbacks": [
+            langfuse_handler,
+            usage_callback,
+        ],
+        "run_name": run_name,
+        "metadata": {
+            "thread_id": thread_id,
+            "tenant_id": str(tenant_id),
+            "retrieval_mode": retrieval_mode,
+        },
+    }
+
+    started = time.perf_counter()
+
+    try:
+        result = await agent_graph.ainvoke(
+            {
+                "tenant_id": tenant_id,
+                "query": question,
+                "retrieval_mode": retrieval_mode,
+            },
+            config=config,
+        )
+    except Exception as exc:
+        logger.exception(
+            "Agent execution failed for tenant=%s thread_id=%s",
+            tenant_id,
+            thread_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Agent execution failed.",
+        ) from exc
+
+    total_ms = round((time.perf_counter() - started) * 1000, 2)
+    return _response_from_result(
+        thread_id=thread_id,
+        result=result,
+        usage=usage_callback,
+        total_ms=total_ms,
+    )
+
+
+@router.post(
+    "",
+    response_model=AgentResponse,
+)
+async def run_agent(
+    tenant_id: UUID,
+    payload: AgentRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AgentResponse:
+    tenant = await db.get(Tenant, tenant_id)
+
+    if tenant is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant not found.",
+        )
+
+    await _enforce_ai_request_limits(
+        request=request,
+        tenant_id=tenant_id,
+        units=1,
+    )
+
+    return await _invoke_agent(
+        tenant_id=tenant_id,
+        question=payload.question,
+        retrieval_mode=payload.retrieval_mode,
+        run_name="enterprise-agent",
+    )
+
+
+@router.post(
+    "/compare",
+    response_model=AgentCompareResponse,
+)
+async def compare_agent_runs(
+    tenant_id: UUID,
+    payload: AgentCompareRequest,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AgentCompareResponse:
+    tenant = await db.get(Tenant, tenant_id)
+
+    if tenant is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tenant not found.",
+        )
+
+    # Two AI executions: compare limit + double global/daily units.
+    await _enforce_ai_request_limits(
+        request=request,
+        tenant_id=tenant_id,
+        units=2,
+        compare=True,
+    )
+
+    standard = await _invoke_agent(
+        tenant_id=tenant_id,
+        question=payload.question,
+        retrieval_mode="standard",
+        run_name="enterprise-agent-compare-standard",
+    )
+    advanced = await _invoke_agent(
+        tenant_id=tenant_id,
+        question=payload.question,
+        retrieval_mode="advanced",
+        run_name="enterprise-agent-compare-advanced",
+    )
+
+    return AgentCompareResponse(
+        question=payload.question,
+        standard=standard,
+        advanced=advanced,
     )
 
 
@@ -119,8 +248,10 @@ async def approve_agent_action(
     tenant_id: UUID,
     thread_id: str,
     payload: AgentApprovalRequest,
+    request: Request,
 ) -> AgentResponse:
     langfuse_handler = CallbackHandler()
+    usage_callback = TokenUsageCallback()
 
     config = {
         "configurable": {
@@ -128,6 +259,7 @@ async def approve_agent_action(
         },
         "callbacks": [
             langfuse_handler,
+            usage_callback,
         ],
         "metadata": {
             "thread_id": thread_id,
@@ -137,9 +269,7 @@ async def approve_agent_action(
         "run_name": "enterprise-agent-approval",
     }
 
-    snapshot = await agent_graph.aget_state(
-        config,
-    )
+    snapshot = await agent_graph.aget_state(config)
 
     if not snapshot.values:
         raise HTTPException(
@@ -159,6 +289,14 @@ async def approve_agent_action(
             detail="Agent execution is not waiting for approval.",
         )
 
+    if payload.approved:
+        client_hash = hash_client_id(client_ip_from_request(request))
+        write_decision = await check_write_rate_limit(client_hash)
+        if not write_decision.allowed:
+            raise_limit_error(write_decision)
+
+    started = time.perf_counter()
+
     try:
         result = await agent_graph.ainvoke(
             Command(
@@ -168,16 +306,32 @@ async def approve_agent_action(
             ),
             config=config,
         )
-
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Agent execution failed.",
         ) from exc
 
-    return AgentResponse(
+    total_ms = round((time.perf_counter() - started) * 1000, 2)
+
+    prior_details = snapshot.values.get("execution_details")
+    if prior_details and result.get("execution_details"):
+        result = {
+            **result,
+            "execution_details": merge_execution_details(
+                prior_details,
+                result.get("execution_details"),
+            ),
+        }
+    elif prior_details and not result.get("execution_details"):
+        result = {
+            **result,
+            "execution_details": prior_details,
+        }
+
+    return _response_from_result(
         thread_id=thread_id,
-        status="completed",
-        route=result["route"],
-        answer=result["final_answer"],
+        result=result,
+        usage=usage_callback,
+        total_ms=total_ms,
     )

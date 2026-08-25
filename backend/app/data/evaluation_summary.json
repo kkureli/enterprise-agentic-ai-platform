@@ -1,0 +1,48 @@
+{
+  "disclaimer": "Metrics are from a curated regression dataset and are not claims of universal production accuracy.",
+  "agent": {
+    "total_cases": 24,
+    "route_accuracy": 1.0,
+    "approval_accuracy": 1.0,
+    "execution_success_rate": 1.0,
+    "end_to_end_pass_rate": 1.0,
+    "source": "evals/results/agent_evaluation.json"
+  },
+  "retrieval": {
+    "num_queries": 15,
+    "eval_k": 3,
+    "strategies": {
+      "Dense": {
+        "recall_at_k": 1.0,
+        "mrr": 1.0,
+        "ndcg_at_k": 1.0
+      },
+      "Sparse": {
+        "recall_at_k": 0.9333333333333333,
+        "mrr": 0.9,
+        "ndcg_at_k": 0.9087286502380971
+      },
+      "Hybrid": {
+        "recall_at_k": 1.0,
+        "mrr": 1.0,
+        "ndcg_at_k": 0.9946480526098792
+      },
+      "Hybrid + Reranker": {
+        "recall_at_k": 1.0,
+        "mrr": 1.0,
+        "ndcg_at_k": 0.9946480526098792
+      },
+      "Multi-Query Hybrid": {
+        "recall_at_k": 1.0,
+        "mrr": 1.0,
+        "ndcg_at_k": 1.0
+      },
+      "Multi-Query + Reranker": {
+        "recall_at_k": 1.0,
+        "mrr": 1.0,
+        "ndcg_at_k": 1.0
+      }
+    },
+    "source": "evals/results/retrieval_results.json"
+  }
+}

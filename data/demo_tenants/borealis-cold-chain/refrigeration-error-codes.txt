@@ -1,0 +1,28 @@
+Borealis Cold Chain — Refrigeration Error Codes
+===============================================
+
+Tenant-specific refrigeration and cold-chain fault codes for Borealis sites.
+
+E-100
+Evaporator coil temperature sensor communication failure.
+Verify sensor connection, controller communication, and sensor calibration.
+
+CL-209
+Low refrigerant suction pressure.
+Inspect refrigerant circuit for leaks and verify compressor operating state.
+
+CL-511
+Condenser fan failure.
+Inspect fan motor, power supply, contactor, and airflow obstruction.
+
+CL-730
+Loading dock thermal seal breach.
+Inspect dock door seals and ensure cold-zone exposure is minimized.
+
+CL-118
+Defrost cycle incomplete.
+Inspect heaters, drain path, and defrost termination sensors.
+
+CL-402
+Chilled zone high temperature alarm.
+Verify setpoint, door state, and evaporator fan operation.

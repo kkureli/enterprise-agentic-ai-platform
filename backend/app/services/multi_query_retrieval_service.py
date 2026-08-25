@@ -15,8 +15,9 @@ async def retrieve_multi_query(
     query: str,
     limit: int = 10,
     filters: RetrievalFilters | None = None,
+    precomputed_queries: list[str] | None = None,
 ) -> list[RetrievedChunk]:
-    queries = await expand_query(query)
+    queries = precomputed_queries if precomputed_queries is not None else await expand_query(query)
 
     result_sets = await asyncio.gather(
         *[

@@ -1,0 +1,25 @@
+Borealis Cold Chain — Refrigeration Maintenance Plan
+====================================================
+
+Compressors
+- operating pressure inspection weekly
+- vibration and oil level check monthly
+- full performance inspection quarterly
+
+Condensers
+- condenser cleaning monthly
+- fan motor and contactor inspection monthly
+- airflow obstruction check weekly
+
+Evaporators
+- coil and drain pan inspection monthly
+- fan operation check weekly
+- defrost performance review monthly
+
+Sensors and controls
+- temperature sensor calibration quarterly
+- controller communication health check monthly
+
+Refrigerant circuit
+- leak checks monthly
+- suction and discharge pressure trend review weekly

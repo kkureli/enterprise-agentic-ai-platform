@@ -1,12 +1,16 @@
 import { useState } from 'react'
 
 import { approveAgentAction, AgentApiError } from '../api/agent'
-import type { PendingAction } from '../types/agent'
+import type { ExecutionDetails, PendingAction } from '../types/agent'
 
 type ApprovalCardProps = {
   threadId: string
   pendingAction: PendingAction
-  onResolved: (approved: boolean, answer: string, error?: string) => void
+  onResolved: (
+    approved: boolean,
+    answer: string,
+    executionDetails?: ExecutionDetails | null,
+  ) => void
 }
 
 function formatPriority(priority: string): string {
@@ -33,7 +37,7 @@ export function ApprovalCard({ threadId, pendingAction, onResolved }: ApprovalCa
 
     try {
       const response = await approveAgentAction(threadId, approved)
-      onResolved(approved, response.answer)
+      onResolved(approved, response.answer, response.execution_details)
     } catch (error) {
       const message =
         error instanceof AgentApiError

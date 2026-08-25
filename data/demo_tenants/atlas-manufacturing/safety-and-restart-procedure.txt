@@ -1,0 +1,24 @@
+Atlas Manufacturing — Safety and Restart Procedure
+==================================================
+
+Lockout/tagout requirements
+1. Isolate energy sources for the affected asset.
+2. Apply personal lock and tag identifying the technician.
+3. Verify zero energy state before beginning work.
+4. Multiple technicians must apply individual locks when shared work occurs.
+
+Restart authorization
+1. Corrective work and verification must be recorded.
+2. Active error codes must be cleared or explained.
+3. Area supervisor or maintenance lead must authorize restart.
+4. Operators may not self-authorize restart after critical or high faults.
+
+Post-maintenance verification
+1. Confirm sensors and interlocks function correctly.
+2. Run a controlled dry cycle without product when applicable.
+3. Confirm no abnormal pressure, temperature, torque, or noise readings.
+
+Operator handoff
+1. Brief the operator on work completed and remaining restrictions.
+2. Confirm the asset status in the operations system.
+3. Release the cell only after acknowledgment of the handoff.

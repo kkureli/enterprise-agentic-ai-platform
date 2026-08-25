@@ -1,11 +1,17 @@
 import { ApprovalCard } from './ApprovalCard'
 import { DetailsPanel } from './DetailsPanel'
+import { ExecutionTrace } from './ExecutionTrace'
 import { RouteBadge } from './RouteBadge'
 import type { ChatMessage } from '../types/agent'
 
 type ChatMessageProps = {
   message: ChatMessage
-  onApprovalResolved: (messageId: string, approved: boolean, answer: string) => void
+  onApprovalResolved: (
+    messageId: string,
+    approved: boolean,
+    answer: string,
+    executionDetails?: import('../types/agent').ExecutionDetails | null,
+  ) => void
 }
 
 export function ChatMessageItem({ message, onApprovalResolved }: ChatMessageProps) {
@@ -40,7 +46,9 @@ export function ChatMessageItem({ message, onApprovalResolved }: ChatMessageProp
         <ApprovalCard
           threadId={message.threadId}
           pendingAction={message.pendingAction}
-          onResolved={(approved, answer) => onApprovalResolved(message.id, approved, answer)}
+          onResolved={(approved, answer, executionDetails) =>
+            onApprovalResolved(message.id, approved, answer, executionDetails)
+          }
         />
       ) : null}
 
@@ -48,6 +56,10 @@ export function ChatMessageItem({ message, onApprovalResolved }: ChatMessageProp
         <p className="chat-message__approval-status">
           {message.approvalResolved === 'approved' ? 'Action approved.' : 'Action rejected.'}
         </p>
+      ) : null}
+
+      {!isUser && !message.isLoading ? (
+        <ExecutionTrace details={message.executionDetails} />
       ) : null}
 
       {!isUser && !message.isLoading ? (

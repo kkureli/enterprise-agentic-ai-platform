@@ -1,0 +1,25 @@
+Atlas Manufacturing — Preventive Maintenance Plan
+=================================================
+
+Hydraulic Press
+- pressure inspection weekly
+- hydraulic oil check weekly
+- filter inspection monthly
+- full preventive maintenance every 500 operating hours
+
+CNC
+- coolant check daily
+- spindle inspection monthly
+- calibration quarterly
+
+Robotic cells
+- visual inspection weekly
+- joint/encoder inspection monthly
+
+Assembly machines
+- fastener torque audit monthly
+- lubrication points service every 250 operating hours
+
+Stamping presses
+- die safety check before each production run
+- clutch and brake inspection monthly

@@ -2,6 +2,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.services.client_identity import LimitDecision
 from app.services.rag_cache_service import (
     build_rag_cache_key,
     get_cached_rag_result,
@@ -86,7 +87,21 @@ async def test_rag_cache_miss_executes_pipeline(monkeypatch):
 
     async def fake_retrieve(**kwargs):
         calls["retrieve"] += 1
-        return []
+        from app.services.rag_retrieval_service import RetrievalRunResult
+
+        return RetrievalRunResult(
+            chunks=[],
+            retrieval_mode="standard",
+            strategy="standard hybrid retrieval with reranker fusion",
+            query_rewrites=None,
+            dense_weight=0.7,
+            sparse_weight=0.3,
+            candidate_count=0,
+            reranker_enabled=True,
+            final_chunk_count=0,
+            retrieval_ms=1.0,
+            reranking_ms=0.0,
+        )
 
     monkeypatch.setattr(
         "app.services.rag_service.retrieve_for_rag_mode",
@@ -124,7 +139,21 @@ async def test_rag_cache_hit_skips_pipeline(monkeypatch):
 
     async def fake_retrieve(**kwargs):
         calls["retrieve"] += 1
-        return []
+        from app.services.rag_retrieval_service import RetrievalRunResult
+
+        return RetrievalRunResult(
+            chunks=[],
+            retrieval_mode="standard",
+            strategy="standard hybrid retrieval with reranker fusion",
+            query_rewrites=None,
+            dense_weight=0.7,
+            sparse_weight=0.3,
+            candidate_count=0,
+            reranker_enabled=True,
+            final_chunk_count=0,
+            retrieval_ms=1.0,
+            reranking_ms=0.0,
+        )
 
     monkeypatch.setattr(
         "app.services.rag_service.retrieve_for_rag_mode",
@@ -214,7 +243,21 @@ async def test_redis_cache_failure_does_not_break_rag(monkeypatch):
     )
 
     async def fake_retrieve(**kwargs):
-        return []
+        from app.services.rag_retrieval_service import RetrievalRunResult
+
+        return RetrievalRunResult(
+            chunks=[],
+            retrieval_mode="standard",
+            strategy="standard hybrid retrieval with reranker fusion",
+            query_rewrites=None,
+            dense_weight=0.7,
+            sparse_weight=0.3,
+            candidate_count=0,
+            reranker_enabled=True,
+            final_chunk_count=0,
+            retrieval_ms=1.0,
+            reranking_ms=0.0,
+        )
 
     monkeypatch.setattr(
         "app.services.rag_service.retrieve_for_rag_mode",
@@ -310,13 +353,21 @@ async def test_agent_endpoint_returns_429_when_rate_limited(client, monkeypatch)
     )
     tenant_id = tenant_response.json()["id"]
 
-    async def deny_rate_limit(_tenant_id):
-        return False
+    async def deny_tenant(_tenant_id, **_kwargs):
+        return LimitDecision(
+            allowed=False,
+            retry_after_seconds=30,
+            reason="Rate limit exceeded. Try again shortly.",
+            status_code=429,
+        )
 
-    monkeypatch.setattr(
-        "app.api.v1.agent.check_agent_rate_limit",
-        deny_rate_limit,
-    )
+    async def allow(*_args, **_kwargs):
+        return LimitDecision(allowed=True)
+
+    monkeypatch.setattr("app.api.v1.agent.check_tenant_rate_limit", deny_tenant)
+    monkeypatch.setattr("app.api.v1.agent.check_client_rate_limit", allow)
+    monkeypatch.setattr("app.api.v1.agent.check_global_ai_rate_limit", allow)
+    monkeypatch.setattr("app.api.v1.agent.check_daily_ai_budget", allow)
 
     response = await client.post(
         f"/api/v1/tenants/{tenant_id}/agent",

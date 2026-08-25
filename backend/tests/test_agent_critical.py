@@ -43,6 +43,14 @@ async def test_agent_returns_graph_result(
                 **state,
                 "route": route,
                 "final_answer": answer,
+                "execution_details": {
+                    "graph_path": [
+                        "router",
+                        "fallback" if route == "unsupported" else route,
+                        "finalize",
+                    ],
+                    "route": route,
+                },
             }
 
     monkeypatch.setattr(
@@ -67,6 +75,9 @@ async def test_agent_returns_graph_result(
     assert data["answer"] == answer
     assert data["thread_id"]
     assert data["pending_action"] is None
+    assert data["execution_details"] is not None
+    assert data["execution_details"]["route"] == route
+    assert "graph_path" in data["execution_details"]
 
 
 @pytest.mark.asyncio

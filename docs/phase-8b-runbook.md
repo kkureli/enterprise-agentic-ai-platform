@@ -64,6 +64,17 @@ REDIS_ENABLED=true
 RAG_CACHE_TTL_SECONDS=300
 AGENT_RATE_LIMIT_REQUESTS=30
 AGENT_RATE_LIMIT_WINDOW_SECONDS=60
+PUBLIC_DEMO_MODE=true
+CLIENT_RATE_LIMIT_REQUESTS=10
+CLIENT_RATE_LIMIT_WINDOW_SECONDS=60
+GLOBAL_AI_RATE_LIMIT_REQUESTS=100
+GLOBAL_AI_RATE_LIMIT_WINDOW_SECONDS=3600
+DEMO_DAILY_AI_REQUEST_LIMIT=500
+MAX_AGENT_QUESTION_CHARS=2000
+COMPARE_RATE_LIMIT_REQUESTS=3
+COMPARE_RATE_LIMIT_WINDOW_SECONDS=300
+DEMO_WRITE_RATE_LIMIT_REQUESTS=5
+DEMO_WRITE_RATE_LIMIT_WINDOW_SECONDS=3600
 QDRANT_URL=https://YOUR-CLUSTER.cloud.qdrant.io:6333
 QDRANT_API_KEY=...
 CORS_ORIGINS=["https://YOUR-APP.azurestaticapps.net"]
@@ -84,16 +95,42 @@ Probes:
 
 - Liveness: `GET /health`
 - Readiness: `GET /ready` — PostgreSQL and Qdrant are hard dependencies; Redis
-  is reported as a soft/degraded dependency (RAG cache + agent rate limiting
-  fail open when Redis is unavailable)
+  is reported as a soft/degraded dependency for ordinary cache/rate features.
+  When `PUBLIC_DEMO_MODE=true`, the hard daily AI budget **fails closed** if
+  Redis cannot verify the counter.
 
 Redis / Upstash is used for:
 
 - Short-lived tenant-aware RAG response caching
-- Lightweight tenant-aware agent rate limiting (`POST /tenants/{id}/agent`)
+- Per-tenant agent rate limiting
+- Per-client (hashed IP) rate limiting
+- Global hourly AI ceiling
+- Hard daily demo AI request budget
+- Compare Runs stricter limit
+- Approved write-action rate limiting
 
 Redis is **not** used for primary application data, LangGraph checkpoints,
 maintenance tickets, or vector storage.
+
+### Public demo cost-defense layers
+
+Application-level controls reduce abuse and Azure OpenAI spend risk but are
+**not** a substitute for Azure subscription budgets/alerts. Do not assume Azure
+budget alerts hard-stop spend unless those alerts are actually configured.
+
+1. RAG cache (repeated identical tenant-aware knowledge questions)
+2. Per-client rate limit (`CLIENT_RATE_LIMIT_*`)
+3. Per-tenant rate limit (`AGENT_RATE_LIMIT_*`)
+4. Global hourly AI limit (`GLOBAL_AI_RATE_LIMIT_*`)
+5. Hard daily request ceiling (`DEMO_DAILY_AI_REQUEST_LIMIT`, fail-closed in public demo)
+6. Maximum prompt length (`MAX_AGENT_QUESTION_CHARS`)
+7. Compare Runs stricter limit (`COMPARE_RATE_LIMIT_*`; each compare = 2 AI units)
+8. Write-action rate limit on approved HITL writes (`DEMO_WRITE_RATE_LIMIT_*`)
+9. Azure Container Apps `maxReplicas=1` (infra concurrency)
+10. Azure Container Apps `minReplicas=0` (scale to zero)
+
+A fragile Redis distributed semaphore was intentionally **not** added; rely on
+global rate limits + single-replica Container Apps instead.
 
 Container listens on **8000**.
 

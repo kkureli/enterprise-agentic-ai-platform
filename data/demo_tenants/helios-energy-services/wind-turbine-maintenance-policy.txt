@@ -1,0 +1,23 @@
+Helios Energy Services — Wind Turbine Maintenance Policy
+========================================================
+
+Severity classifications
+Critical: immediate remote shutdown and field dispatch within 2 hours when safe.
+High: field response within 8 hours.
+Medium: schedule within 48 hours.
+Low: include in the next planned site visit.
+
+Remote inspection rules
+- review SCADA trends and active fault codes before dispatch
+- attempt safe remote reset only when the fault class allows it
+- document remote findings in the maintenance ticket
+
+Field technician escalation
+- any yaw, gearbox, or blade pitch critical fault requires field escalation
+- electrical isolation must be confirmed before nacelle or inverter work
+
+Shutdown conditions
+- gearbox oil over-temperature
+- uncontrolled yaw overload
+- inverter unsafe DC bus state
+- loss of site communications that prevents safe monitoring

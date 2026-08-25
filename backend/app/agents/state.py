@@ -1,5 +1,7 @@
-from typing import Literal, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 from uuid import UUID
+
+from app.agents.execution_trace import merge_execution_details
 
 AgentRoute = Literal[
     "knowledge",
@@ -28,3 +30,5 @@ class AgentState(TypedDict, total=False):
     tool_answer: str
     sql_answer: str
     final_answer: str
+
+    execution_details: Annotated[dict[str, Any], merge_execution_details]

@@ -1,0 +1,28 @@
+Atlas Manufacturing — Maintenance Policy
+========================================
+
+Severity response expectations
+
+Critical:
+immediate shutdown and technician response within 15 minutes.
+
+High:
+response within 30 minutes.
+
+Medium:
+response within 4 hours.
+
+Low:
+schedule during next maintenance window.
+
+Hydraulic pressure-loss incidents require inspection before restart.
+Safety interlocks may never be bypassed for production.
+
+Any asset with an active critical or high-severity fault must remain locked out
+until a qualified technician clears the fault and records verification.
+Production supervisors may request temporary workarounds only when documented
+risk assessment is completed and signed.
+
+Open maintenance tickets must reference the asset code, active error code when
+present, and the observed symptom. Closed tickets must include the corrective
+action and restart authorization name.

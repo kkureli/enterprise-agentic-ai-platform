@@ -1,0 +1,23 @@
+Helios Energy Services — Lockout/Tagout Field Procedure
+=======================================================
+
+Electrical isolation
+1. Open and lock the turbine or inverter disconnect.
+2. Verify absence of voltage with an approved tester.
+3. Apply personal lock and tag at the isolation point.
+
+Mechanical isolation
+1. Immobilize yaw, pitch, and rotating assemblies as required.
+2. Secure access hatches and confirm rotor is in a safe state.
+3. Apply mechanical locks where available.
+
+Verification before work
+1. Confirm isolation with a second qualified person when required.
+2. Review active fault codes and work permit scope.
+3. Do not begin work until zero-energy verification is complete.
+
+Restart authorization
+1. Remove tools and restore guards.
+2. Clear or document remaining faults.
+3. Site lead authorizes restart after communications and SCADA health checks.
+4. Record restart time and authorizing technician.

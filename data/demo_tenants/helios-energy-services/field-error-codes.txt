@@ -1,0 +1,30 @@
+Helios Energy Services — Field Error Codes
+==========================================
+
+Tenant-specific field equipment fault codes for Helios renewable sites.
+
+E-100
+Power inverter communication timeout with site controller.
+Check inverter network connection, controller availability, and communication
+gateway status.
+
+WT-302
+Wind turbine yaw motor overload.
+Stop automatic yaw operation and inspect motor load, gearbox resistance, and
+yaw drive.
+
+WT-118
+Gearbox oil temperature above operating limit.
+Reduce turbine load and inspect lubrication system and cooling circuit.
+
+INV-604
+DC bus overvoltage.
+Place inverter in safe state and inspect DC input and grid conditions.
+
+WT-221
+Blade pitch actuator fault.
+Suspend automatic pitch control and inspect actuator hydraulics or electrics.
+
+INV-310
+Grid frequency out of operating band.
+Confirm utility conditions before restoring inverter export.

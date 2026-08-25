@@ -301,14 +301,21 @@ VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
 VITE_TENANT_ID=
 ```
 
-If `VITE_TENANT_ID` is empty, enter a local tenant UUID in the UI after creating
-one via `POST /api/v1/tenants`.
+If `VITE_TENANT_ID` is empty, the playground loads demo tenants from
+`GET /api/v1/demo/tenants` after seeding.
+
+Seed the public demo playground (idempotent):
+
+```bash
+cd backend
+PYTHONPATH=. uv run --env-file .env.development python scripts/seed_demo_playground.py
+```
 
 Useful URLs:
 
 - API: `http://127.0.0.1:8000`
 - Swagger: `http://127.0.0.1:8000/docs`
-- Chat UI: `http://localhost:5173`
+- Playground UI: `http://localhost:5173`
 - Health: `http://127.0.0.1:8000/health`
 - Readiness: `http://127.0.0.1:8000/ready`
 - Qdrant dashboard: `http://localhost:6333/dashboard`
