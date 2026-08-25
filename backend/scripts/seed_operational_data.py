@@ -12,8 +12,19 @@ from app.models import (
     Tenant,
 )
 
+DEMO_TENANT_NAME = "Enterprise Demo"
+
 
 async def get_target_tenant_id(session):
+    # First, reuse our deterministic demo tenant if it already exists.
+    result = await session.execute(select(Tenant.id).where(Tenant.name == DEMO_TENANT_NAME))
+    tenant_id = result.scalar_one_or_none()
+
+    if tenant_id is not None:
+        return tenant_id
+
+    # Preserve the previous behavior for an existing database:
+    # use the tenant that owns the most documents.
     result = await session.execute(
         select(Tenant.id)
         .outerjoin(Document, Document.tenant_id == Tenant.id)
@@ -21,13 +32,19 @@ async def get_target_tenant_id(session):
         .order_by(func.count(Document.id).desc())
         .limit(1)
     )
-
     tenant_id = result.scalar_one_or_none()
 
-    if tenant_id is None:
-        raise RuntimeError("No tenant exists. Create a tenant first.")
+    if tenant_id is not None:
+        return tenant_id
 
-    return tenant_id
+    # Completely empty database: create a demo tenant.
+    tenant = Tenant(name=DEMO_TENANT_NAME)
+    session.add(tenant)
+    await session.flush()
+
+    print(f"Created demo tenant: {tenant.id}")
+
+    return tenant.id
 
 
 async def get_or_create_asset(
@@ -46,7 +63,6 @@ async def get_or_create_asset(
             Asset.asset_code == asset_code,
         )
     )
-
     asset = result.scalar_one_or_none()
 
     if asset is not None:

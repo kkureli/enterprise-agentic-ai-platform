@@ -13,6 +13,7 @@ from app.schemas.document import DocumentRead
 from app.services.document_ingestion import ingest_document
 from app.services.document_parser import DocumentParseError
 from app.services.document_storage import save_document_file
+from app.services.rag_cache_service import increment_rag_cache_version
 
 router = APIRouter(
     prefix="/tenants/{tenant_id}/documents",
@@ -83,5 +84,6 @@ async def upload_document(
         raise
 
     await db.refresh(document)
+    await increment_rag_cache_version(tenant_id)
 
     return document

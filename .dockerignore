@@ -1,0 +1,36 @@
+# Docker build context is the repository root:
+#   docker build -f backend/Dockerfile -t enterprise-agentic-ai-backend .
+
+.git
+.github
+.cursor
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.DS_Store
+**/.env
+**/.env.*
+!**/.env.example
+
+# Frontend and local infra are not part of the backend image
+frontend/
+infra/
+docs/
+evals/
+*.md
+docker-compose.yml
+
+# Backend local-only artifacts
+backend/tests/
+backend/storage/
+backend/.vscode/
+backend/vacation-policy.txt
+backend/README.md
+
+# MCP local-only artifacts
+mcp/__pycache__/
+mcp/client_test.py
+mcp/.venv/

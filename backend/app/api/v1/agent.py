@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -14,6 +15,9 @@ from app.schemas.agent import (
     AgentRequest,
     AgentResponse,
 )
+from app.services.rate_limit_service import check_agent_rate_limit
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/tenants/{tenant_id}/agent",
@@ -39,6 +43,14 @@ async def run_agent(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found.",
+        )
+
+    allowed = await check_agent_rate_limit(tenant_id)
+
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Try again shortly.",
         )
 
     thread_id = str(uuid4())
@@ -69,6 +81,12 @@ async def run_agent(
         )
 
     except Exception as exc:
+        logger.exception(
+            "Agent execution failed for tenant=%s thread_id=%s",
+            tenant_id,
+            thread_id,
+        )
+
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Agent execution failed.",

@@ -5,7 +5,23 @@ from typing import Any
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-MCP_SERVER_DIR = Path(__file__).resolve().parents[3] / "mcp"
+from app.core.config import settings
+
+
+def get_mcp_server_dir() -> Path:
+    if settings.mcp_server_dir:
+        return Path(settings.mcp_server_dir)
+
+    # Monorepo layout: <repo>/mcp relative to backend/app/services/
+    monorepo_mcp = Path(__file__).resolve().parents[3] / "mcp"
+    # Container layout: /app/mcp next to the packaged app/
+    packaged_mcp = Path(__file__).resolve().parents[2] / "mcp"
+
+    for candidate in (monorepo_mcp, packaged_mcp):
+        if candidate.is_dir():
+            return candidate
+
+    return monorepo_mcp
 
 
 @asynccontextmanager
@@ -13,7 +29,7 @@ async def maintenance_mcp_session():
     server_params = StdioServerParameters(
         command="uv",
         args=["run", "python", "server.py"],
-        cwd=str(MCP_SERVER_DIR),
+        cwd=str(get_mcp_server_dir()),
     )
 
     async with stdio_client(server_params) as (read, write):

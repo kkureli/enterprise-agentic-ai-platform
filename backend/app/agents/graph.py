@@ -55,62 +55,77 @@ def route_after_approval(state: AgentState) -> str:
     return "finalize"
 
 
-builder = StateGraph(AgentState)
+def build_agent_graph():
+    graph_builder = StateGraph(AgentState)
 
-builder.add_node("router", router_node)
-builder.add_node("rag", rag_node)
-builder.add_node("finalize", finalize_node)
-builder.add_node("fallback", fallback_node)
-builder.add_node("tool", mcp_tool_node)
-builder.add_node("sql", sql_node)
-builder.add_node("approval", approval_node)
-builder.add_node("approved_action", approved_action_node)
+    graph_builder.add_node("router", router_node)
+    graph_builder.add_node("rag", rag_node)
+    graph_builder.add_node("finalize", finalize_node)
+    graph_builder.add_node("fallback", fallback_node)
+    graph_builder.add_node("tool", mcp_tool_node)
+    graph_builder.add_node("sql", sql_node)
+    graph_builder.add_node("approval", approval_node)
+    graph_builder.add_node("approved_action", approved_action_node)
 
-builder.add_edge(START, "router")
+    graph_builder.add_edge(START, "router")
 
-builder.add_conditional_edges(
-    "router",
-    route_after_router,
-    {
-        "knowledge": "rag",
-        "tool": "tool",
-        "sql": "sql",
-        "unsupported": "fallback",
-    },
-)
+    graph_builder.add_conditional_edges(
+        "router",
+        route_after_router,
+        {
+            "knowledge": "rag",
+            "tool": "tool",
+            "sql": "sql",
+            "unsupported": "fallback",
+        },
+    )
+
+    graph_builder.add_conditional_edges(
+        "tool",
+        route_after_tool,
+        {
+            "approval": "approval",
+            "finalize": "finalize",
+        },
+    )
+
+    graph_builder.add_conditional_edges(
+        "approval",
+        route_after_approval,
+        {
+            "approved_action": "approved_action",
+            "finalize": "finalize",
+        },
+    )
+
+    graph_builder.add_edge(
+        "approved_action",
+        "finalize",
+    )
+
+    graph_builder.add_edge("rag", "finalize")
+    graph_builder.add_edge("sql", "finalize")
+
+    graph_builder.add_edge("finalize", END)
+    graph_builder.add_edge("fallback", END)
+
+    return graph_builder
 
 
-builder.add_conditional_edges(
-    "tool",
-    route_after_tool,
-    {
-        "approval": "approval",
-        "finalize": "finalize",
-    },
-)
+builder = build_agent_graph()
 
-builder.add_conditional_edges(
-    "approval",
-    route_after_approval,
-    {
-        "approved_action": "approved_action",
-        "finalize": "finalize",
-    },
-)
-
-builder.add_edge(
-    "approved_action",
-    "finalize",
-)
-
-builder.add_edge("rag", "finalize")
-builder.add_edge("sql", "finalize")
-
-builder.add_edge("finalize", END)
-builder.add_edge("fallback", END)
-
+# Default for local development and tests. Production may replace this during
+# application lifespan when CHECKPOINT_BACKEND=postgres.
 checkpointer = InMemorySaver()
 
 agent_graph = builder.compile(
     checkpointer=checkpointer,
 )
+
+
+def compile_agent_graph(active_checkpointer):
+    """Compile the agent graph with the provided checkpointer."""
+
+    return builder.compile(
+        checkpointer=active_checkpointer,
+    )

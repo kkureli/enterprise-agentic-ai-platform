@@ -22,6 +22,8 @@ The project is being developed incrementally with a focus on software engineerin
 
 **Sprint 7 — React UI & Production UX: completed**
 
+**Sprint 8 — Azure Deployment & CI/CD: in progress (Phase 8A packaging complete)**
+
 Implemented so far:
 
 - FastAPI backend with tenant-scoped APIs
@@ -39,6 +41,7 @@ Implemented so far:
 - Langfuse tracing for LangGraph runs and nested LLM calls (latency, tokens, model, cost)
 - 24-case agent golden dataset with router and end-to-end evaluation
 - React + TypeScript chat frontend with HITL approval card and route indicators
+- Backend production Docker packaging (uv + uvicorn; no secrets in image)
 - Health/readiness endpoints, Ruff, pytest (21 passing), and GitHub Actions CI
 
 Current agent orchestration:
@@ -103,6 +106,11 @@ flowchart TD
     HealthAPI --> Redis[(Redis)]
     HealthAPI --> Qdrant
 
+    RagAPI --> RagCache[RAG Response Cache]
+    RagCache --> Redis
+    AgentAPI --> RateLimit[Agent Rate Limit]
+    RateLimit --> Redis
+
     Alembic[Alembic Migrations] --> PostgreSQL
 
     Pytest[pytest Integration Tests] --> FastAPI
@@ -149,7 +157,7 @@ UNIQUE (tenant_id, email)
 ### Data & Infrastructure
 
 - PostgreSQL
-- Redis
+- Redis (RAG response cache + agent rate limiting)
 - Qdrant
 - Docker Compose
 - Azure OpenAI (embeddings + chat)
@@ -223,36 +231,54 @@ cd backend && uv sync --dev
 
 ### 3. Configure environment
 
-Create `backend/.env` from the example:
+Use **separate** untracked env files (do not mix local and cloud URLs in one file):
 
 ```bash
-cp .env.example .env
+cp .env.example .env.development   # local Docker Postgres / Redis / Qdrant
+cp .env.example .env.production    # Neon / Qdrant Cloud / Upstash (local test only)
 ```
 
-The PostgreSQL URL must use the async SQLAlchemy driver:
+Always select the file explicitly with `uv run --env-file ...`. Settings do **not**
+auto-load a shared `.env`.
+
+Local development should use:
 
 ```text
-postgresql+asyncpg://postgres:postgres@localhost:5432/agentic_ai
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/agentic_ai
+REDIS_URL=redis://localhost:6379
+REDIS_ENABLED=true
+RAG_CACHE_TTL_SECONDS=300
+AGENT_RATE_LIMIT_REQUESTS=30
+AGENT_RATE_LIMIT_WINDOW_SECONDS=60
+QDRANT_URL=http://localhost:6333
+CHECKPOINT_BACKEND=memory
 ```
 
-Optional Langfuse tracing (agent runs and evaluations):
-
-```text
-LANGFUSE_PUBLIC_KEY=...
-LANGFUSE_SECRET_KEY=...
-LANGFUSE_BASE_URL=https://cloud.langfuse.com
-```
+Fill Azure OpenAI / Langfuse keys in `.env.development` as needed. Never commit
+real secrets. Never put both localhost and cloud `QDRANT_URL` values in the same file.
 
 ### 4. Run migrations
 
 ```bash
-uv run alembic upgrade head
+uv run --env-file .env.development alembic upgrade head
+```
+
+Against Neon (from your machine, using production config):
+
+```bash
+uv run --env-file .env.production alembic upgrade head
 ```
 
 ### 5. Start the API
 
 ```bash
-uv run uvicorn app.main:app --reload
+uv run --env-file .env.development uvicorn app.main:app --reload
+```
+
+Local test against cloud services:
+
+```bash
+uv run --env-file .env.production uvicorn app.main:app
 ```
 
 ### 6. Start the frontend (Sprint 7)
@@ -261,12 +287,14 @@ From the repository root:
 
 ```bash
 cd frontend
-cp .env.example .env
+cp .env.example .env.development
+cp .env.example .env.production
 npm install
 npm run dev
 ```
 
-Configure `frontend/.env`:
+Vite loads `.env.development` for `npm run dev` and `.env.production` for
+`npm run build`. Local API base:
 
 ```text
 VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
@@ -365,7 +393,7 @@ cd backend && uv run pytest -q
 
 ```bash
 cd ~/Desktop/enterprise-agentic-ai-platform &&
-PYTHONPATH=backend uv run --project backend --env-file backend/.env python -m evals.retrieval.run_evaluation
+PYTHONPATH=backend uv run --project backend --env-file backend/.env.development python -m evals.retrieval.run_evaluation
 ```
 
 Results are written to `evals/results/retrieval_results.json`.
@@ -382,14 +410,14 @@ Router-only evaluation:
 
 ```bash
 cd ~/Desktop/enterprise-agentic-ai-platform &&
-PYTHONPATH=backend uv run --project backend --env-file backend/.env python -m evals.agent.run_router_evaluation
+PYTHONPATH=backend uv run --project backend --env-file backend/.env.development python -m evals.agent.run_router_evaluation
 ```
 
 End-to-end agent evaluation (with Langfuse tracing):
 
 ```bash
 cd ~/Desktop/enterprise-agentic-ai-platform &&
-PYTHONPATH=backend uv run --project backend --env-file backend/.env python -m evals.agent.run_agent_evaluation
+PYTHONPATH=backend uv run --project backend --env-file backend/.env.development python -m evals.agent.run_agent_evaluation
 ```
 
 Results are written to `evals/results/agent_evaluation.json`.
@@ -412,9 +440,43 @@ uv run ruff format app tests
 GitHub Actions runs on pushes and pull requests to `master` and `main`.
 
 ```text
-dependency install → Ruff lint → Ruff format check → pytest
+backend job: dependency install → Ruff lint → Ruff format check → pytest
+backend-image job: Docker build only (no push, no Azure credentials)
 ```
 
+## Production packaging (Sprint 8 Phase 8A)
+
+Backend container image (build from **repository root** so MCP is included):
+
+```bash
+docker build -f backend/Dockerfile -t enterprise-agentic-ai-backend .
+```
+
+- Image runs uvicorn on `0.0.0.0:${PORT:-8000}`
+- Same container includes the stdio MCP server under `/app/mcp`
+- Linux image uses **CPU-only PyTorch** (no CUDA/NVIDIA wheels)
+- Secrets are injected at runtime via environment variables (see `backend/.env.example`)
+- `/health` is liveness-compatible; `/ready` requires PostgreSQL and Qdrant.
+  Redis is reported and may mark the app `degraded` without returning 503,
+  because RAG cache and agent rate limiting fail open.
+- Redis / Upstash: short-lived tenant-aware RAG response caching and
+  lightweight agent rate limiting only (not application state or checkpoints)
+- Azure OpenAI and Langfuse are **not** required for process liveness
+- Frontend production builds use `VITE_API_BASE_URL` at build time
+- Container-local document storage (`DOCUMENT_STORAGE_PATH`) is **not** durable —
+  production object storage (Azure Blob) is Phase 8B
+- No new application-hosting Azure resources were provisioned in Phase 8A.
+  Existing Azure AI Foundry, Application Insights, and Log Analytics resources
+  remain in use. The FastAPI backend and React frontend have not yet been
+  deployed to Azure.
+
+Phase 8B cost target: ~$0 fixed monthly (Static Web Apps Free, Container Apps
+scale-to-zero, Neon/Qdrant/Upstash free tiers). Avoid AKS, GPU, always-on
+compute, and paid managed databases for this portfolio demo.
+
+Preparation for Phase 8B is documented in [`docs/phase-8b-runbook.md`](docs/phase-8b-runbook.md)
+(checkpointer config, Neon migrations, ACA/SWA steps). **No new hosting/data
+resources have been provisioned yet.**
 ## Roadmap
 
 ### Completed
@@ -428,9 +490,15 @@ dependency install → Ruff lint → Ruff format check → pytest
 - **Sprint 6** — Evaluation, Langfuse & production observability
 - **Sprint 7** — React chat UI & production UX
 
+### In progress
+
+- **Sprint 8** — Azure deployment & CI/CD
+  - Phase 8A (packaging) complete
+  - Phase 8B (Azure provision / deploy) not started
+
 ### Planned
 
-- **Sprint 8–10** — Azure deployment, multimodal demo, portfolio polish
+- **Sprint 9–10** — Multimodal demo, portfolio polish
 
 Production deployment, persistent checkpoint storage, JWT/RBAC, and persistent
 chat history are not complete.

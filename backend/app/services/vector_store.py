@@ -4,6 +4,7 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import (
     Distance,
     Modifier,
+    PayloadSchemaType,
     PointStruct,
     SparseVector,
     SparseVectorParams,
@@ -14,6 +15,12 @@ from app.core.config import settings
 
 
 def get_qdrant_client() -> AsyncQdrantClient:
+    if settings.qdrant_api_key:
+        return AsyncQdrantClient(
+            url=settings.qdrant_url,
+            api_key=settings.qdrant_api_key,
+        )
+
     return AsyncQdrantClient(
         url=settings.qdrant_url,
     )
@@ -23,27 +30,38 @@ async def ensure_collection(
     client: AsyncQdrantClient,
     vector_size: int,
 ) -> None:
+    collection_name = settings.qdrant_collection_name
+
     exists = await client.collection_exists(
-        collection_name=settings.qdrant_collection_name,
+        collection_name=collection_name,
     )
 
-    if exists:
-        return
+    if not exists:
+        await client.create_collection(
+            collection_name=collection_name,
+            vectors_config={
+                "dense": VectorParams(
+                    size=vector_size,
+                    distance=Distance.COSINE,
+                )
+            },
+            sparse_vectors_config={
+                "sparse": SparseVectorParams(
+                    modifier=Modifier.IDF,
+                )
+            },
+        )
 
-    await client.create_collection(
-        collection_name=settings.qdrant_collection_name,
-        vectors_config={
-            "dense": VectorParams(
-                size=vector_size,
-                distance=Distance.COSINE,
-            )
-        },
-        sparse_vectors_config={
-            "sparse": SparseVectorParams(
-                modifier=Modifier.IDF,
-            )
-        },
+    collection = await client.get_collection(
+        collection_name=collection_name,
     )
+
+    if "tenant_id" not in collection.payload_schema:
+        await client.create_payload_index(
+            collection_name=collection_name,
+            field_name="tenant_id",
+            field_schema=PayloadSchemaType.KEYWORD,
+        )
 
 
 async def index_document_chunks(

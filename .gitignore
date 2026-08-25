@@ -1,5 +1,4 @@
-cd .. && cat > .gitignore <<'EOF'
-# Environment
+# Environment (keep *.example tracked)
 .env
 .env.*
 !.env.example
@@ -23,7 +22,6 @@ build/
 
 # Logs
 *.log
-EOF
 
 # Uploaded files
 backend/storage/

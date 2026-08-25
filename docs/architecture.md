@@ -1,14 +1,16 @@
 # Architecture
 
-## Current Architecture — Sprint 0–7
+## Current Architecture — Sprint 0–8 (Phase 8A packaging)
 
 The platform currently provides a multi-tenant FastAPI backend with document
 ingestion, hybrid retrieval, reranking, multi-query RAG modes, retrieval
 evaluation, a **router-based LangGraph agent** with knowledge (RAG), SQL, and
 MCP tool routes, **HITL approval** for write actions, **Langfuse tracing**,
-agent evaluation, and a **React chat frontend**. JWT/RBAC, persistent production
-checkpoint storage, persistent chat history, and cloud deployment remain
-planned — production deployment is **not** complete.
+agent evaluation, a **React chat frontend**, and **backend production container
+packaging**. JWT/RBAC, persistent production checkpoint storage, persistent chat
+history, and Azure cloud deployment remain planned — production deployment is
+**not** complete. Sprint 8 Phase 8A packages the backend image only; Azure
+resource provisioning is Phase 8B.
 
 ```mermaid
 flowchart TD
@@ -65,6 +67,11 @@ flowchart TD
     HealthAPI --> PostgreSQL
     HealthAPI --> Redis[(Redis)]
     HealthAPI --> Qdrant
+
+    RagAPI --> RagCache[RAG Response Cache]
+    RagCache --> Redis
+    AgentAPI --> RateLimit[Agent Rate Limit]
+    RateLimit --> Redis
 
     Alembic[Alembic Migrations] --> PostgreSQL
     Evals[Retrieval Eval Runner] --> Qdrant
@@ -348,8 +355,11 @@ Features:
 
 Configuration:
 
-- `frontend/.env.example` — `VITE_API_BASE_URL`, `VITE_TENANT_ID`
-- Backend dev CORS — `CORS_ORIGINS` in `backend/.env.example`
+- `frontend/.env.example` — placeholders; Vite uses `.env.development` /
+  `.env.production` (gitignored) for `npm run dev` / `npm run build`
+- Backend — `backend/.env.example` plus explicit
+  `uv run --env-file .env.development|production ...` (no shared `.env` auto-load)
+- Backend CORS — `CORS_ORIGINS` in the selected env file
 
 Known limitation: the Agent API does **not** expose RAG citations/sources, so
 the frontend does not render a Sources section.
@@ -593,14 +603,26 @@ Current responsibility:
 
 ### Redis
 
-Currently provisioned and validated through the readiness endpoint.
+Used for short-lived, tenant-aware application optimizations:
 
-Planned responsibilities (not yet used for agent checkpoints):
+- RAG response caching (knowledge answers only; TTL ≈ 5 minutes)
+- Lightweight fixed-window agent rate limiting (`POST .../agent`)
 
-- Caching
-- Persistent / shared agent checkpoint support
-- Rate limiting
+Redis is **not** used for:
 
+- Primary application data
+- LangGraph persistent checkpoints (PostgreSQL / Neon)
+- Maintenance tickets
+- Vector storage (Qdrant)
+
+Cache keys are versioned per tenant (`rag_version:{tenant_id}`). Successful
+document ingestion increments the version so prior RAG cache entries become
+logically stale without SCAN/delete-by-prefix.
+
+Both features **fail open / degrade gracefully** when Redis is unavailable:
+RAG continues without cache; agent requests are allowed without rate limiting.
+Stricter production environments may fail closed or enforce limits at an API
+gateway.
 ### Qdrant
 
 Current responsibility:
@@ -626,15 +648,134 @@ GET /health
 GET /ready
 ```
 
-`/health` verifies that the application process is running.
+`/health` verifies that the application process is running (liveness). It does
+**not** require Azure OpenAI or Langfuse.
 
-`/ready` verifies critical infrastructure dependencies:
+`/ready` verifies infrastructure dependencies:
 
 ```text
-PostgreSQL
-Redis
-Qdrant
+PostgreSQL  → hard (required)
+Qdrant      → hard (required)
+Redis       → soft / degraded-mode (RAG cache + rate limiting)
 ```
+
+When PostgreSQL and Qdrant are healthy but Redis is down (and `REDIS_ENABLED`),
+`/ready` still returns `status: "ready"` with `"degraded": true` and
+`services.redis: false`. Redis failure does not make the app unready because
+caching and rate limiting fail open.
+
+Example (Redis unavailable):
+
+```json
+{
+  "status": "ready",
+  "services": {
+    "postgres": true,
+    "qdrant": true,
+    "redis": false
+  },
+  "degraded": true
+}
+```
+
+These endpoints are suitable for container platform probes. Azure OpenAI and
+Langfuse remain optional for process health.
+
+### Production topology (Phase 8B target)
+
+```text
+FastAPI / LangGraph
+├── Neon PostgreSQL
+│   ├── application data
+│   └── LangGraph checkpoints
+├── Qdrant Cloud
+│   └── vector retrieval
+├── Redis / Upstash
+│   ├── RAG cache
+│   └── agent rate limiting
+└── Azure OpenAI / Foundry
+```
+
+## Production Packaging (Sprint 8 Phase 8A)
+
+Backend image (repository-root build context packages MCP in the same container):
+
+```bash
+docker build -f backend/Dockerfile -t enterprise-agentic-ai-backend .
+```
+
+- Multi-stage build with `uv` and `uv.lock` (production deps only)
+- Linux resolves **CPU-only PyTorch** via the official PyTorch CPU index
+  (macOS local development continues to use PyPI torch wheels)
+- MCP stdio server is copied to `/app/mcp` and launched with `uv run`
+- Runs as non-root user; binds `0.0.0.0:${PORT:-8000}`
+- No `.env` or secrets baked into the image
+- Runtime configuration via environment variables (`DATABASE_URL`, `REDIS_URL`,
+  `QDRANT_URL`, `QDRANT_API_KEY`, `CHECKPOINT_BACKEND`, Azure OpenAI, Langfuse,
+  `CORS_ORIGINS`, optional `MCP_SERVER_DIR`)
+- Local/dev machines use explicit env files:
+  `uv run --env-file .env.development|production ...` (no silent shared `.env`)
+- Frontend continues to use Vite mode files (`.env.development` /
+  `.env.production`) and build-time `VITE_API_BASE_URL` (no frontend Docker
+  image in Phase 8A)
+- CI validates image build only (no push / no deploy)
+
+### Document storage limitation
+
+`DOCUMENT_STORAGE_PATH` (default `/app/storage/documents` in the container) is
+local filesystem storage suitable for development only. It is **not** durable
+across container restarts/redeploys. Phase 8B should move uploaded documents to
+persistent object storage (preferred: Azure Blob Storage).
+
+### Azure status (Phase 8A)
+
+No new application-hosting Azure resources were provisioned in Phase 8A.
+Existing Azure AI Foundry, Application Insights, and Log Analytics resources
+remain in use. The FastAPI backend and React frontend have not yet been
+deployed to Azure.
+
+### Phase 8B target (prepared in-repo, not provisioned)
+
+Low-cost portfolio deploy (~$0 fixed monthly):
+
+| Layer | Target |
+|-------|--------|
+| Frontend | Azure Static Web Apps Free |
+| Backend | Azure Container Apps Consumption, `minReplicas=0`, port 8000 |
+| PostgreSQL | Neon Free (`DATABASE_URL`, `ssl=require`) |
+| HITL checkpoints | Same Neon DB via `CHECKPOINT_BACKEND=postgres` |
+| Vectors | Qdrant Cloud Free (`QDRANT_URL` + `QDRANT_API_KEY`) |
+| Redis | Upstash Free (`REDIS_URL=rediss://...`) — RAG cache + agent rate limiting |
+| LLM | Existing Azure AI Foundry / Azure OpenAI |
+| Observability | Existing Langfuse + App Insights / Log Analytics |
+
+Local default remains `CHECKPOINT_BACKEND=memory` (`InMemorySaver`).
+Production selects PostgreSQL-backed LangGraph checkpoints without a second
+database. See `docs/phase-8b-runbook.md` for manual steps.
+
+After Neon `DATABASE_URL` is configured:
+
+```bash
+cd backend && uv run --env-file .env.production alembic upgrade head
+```
+
+Checkpoint tables are created on startup by `AsyncPostgresSaver.setup()` when
+`CHECKPOINT_BACKEND=postgres`.
+
+### Phase 8B cost constraint
+
+Target fixed monthly infrastructure cost ≈ $0 for this portfolio/demo:
+
+- Azure Static Web Apps Free
+- Azure Container Apps Consumption with `minReplicas = 0`
+- Existing Azure AI Foundry / Azure OpenAI
+- Existing Application Insights / Log Analytics where useful
+- Neon Free PostgreSQL (not paid Azure PostgreSQL)
+- Qdrant Cloud Free
+- Upstash Redis Free
+
+Avoid AKS, GPU compute, always-on Container Apps, paid Azure PostgreSQL,
+Azure Managed Redis, premium networking, and unnecessary gateways.
 
 ## Database Migrations
 
@@ -778,7 +919,7 @@ flowchart TD
 
     SQL --> PostgreSQL[(PostgreSQL)]
 
-    Graph --> Redis[(Redis State / Cache)]
+    Graph --> Redis[(Redis RAG Cache / Rate Limit)]
     Graph --> Observability[Langfuse / OpenTelemetry]
     Graph --> Evals[Evaluation Layer]
 ```

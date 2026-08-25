@@ -1,9 +1,9 @@
 from qdrant_client import AsyncQdrantClient
-from redis.asyncio import Redis
 from sqlalchemy import text
 
 from app.core.config import settings
 from app.db.session import engine
+from app.services.redis_service import ping_redis
 
 
 async def check_postgres() -> bool:
@@ -16,18 +16,17 @@ async def check_postgres() -> bool:
 
 
 async def check_redis() -> bool:
-    redis = Redis.from_url(settings.redis_url)
-
-    try:
-        return bool(await redis.ping())
-    except Exception:
-        return False
-    finally:
-        await redis.aclose()
+    return await ping_redis()
 
 
 async def check_qdrant() -> bool:
-    client = AsyncQdrantClient(url=settings.qdrant_url)
+    if settings.qdrant_api_key:
+        client = AsyncQdrantClient(
+            url=settings.qdrant_url,
+            api_key=settings.qdrant_api_key,
+        )
+    else:
+        client = AsyncQdrantClient(url=settings.qdrant_url)
 
     try:
         await client.get_collections()

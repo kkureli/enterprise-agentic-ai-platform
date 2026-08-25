@@ -59,3 +59,46 @@ jobs:
 
       - name: Run tests
         run: uv run pytest -q
+
+  backend-image:
+    name: Backend Docker image (build only)
+    runs-on: ubuntu-latest
+    # Skip when only frontend/docs change; rebuild when packaging/runtime inputs change.
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect packaging-related changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            packaging:
+              - 'backend/Dockerfile'
+              - 'backend/pyproject.toml'
+              - 'backend/uv.lock'
+              - 'backend/app/**'
+              - 'backend/alembic/**'
+              - 'backend/alembic.ini'
+              - 'backend/scripts/**'
+              - 'mcp/**'
+              - '.dockerignore'
+              - '.github/workflows/backend-ci.yml'
+
+      - name: Set up Docker Buildx
+        if: steps.filter.outputs.packaging == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend production image
+        if: steps.filter.outputs.packaging == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./backend/Dockerfile
+          push: false
+          tags: enterprise-agentic-ai-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

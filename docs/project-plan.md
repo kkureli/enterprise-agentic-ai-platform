@@ -4,7 +4,7 @@ This document tracks the implementation roadmap for the **Enterprise Agentic AI 
 
 The project is intentionally built in incremental sprints. A capability is only marked as complete after it is implemented and verified locally.
 
-**Current progress:** Sprint 0 ✅ · Sprint 1 ✅ · Sprint 2 ✅ · Sprint 3 ✅ · Sprint 4 ✅ · Sprint 5 ✅ · Sprint 6 ✅ · Sprint 7 ✅ · Sprint 8+ ⬜ planned
+**Current progress:** Sprint 0 ✅ · Sprint 1 ✅ · Sprint 2 ✅ · Sprint 3 ✅ · Sprint 4 ✅ · Sprint 5 ✅ · Sprint 6 ✅ · Sprint 7 ✅ · Sprint 8 🟡 Phase 8A packaging · Sprint 9+ ⬜ planned
 
 ## Status Legend
 
@@ -921,31 +921,78 @@ auth, document management UI, citation surfacing, production CORS policy.
 
 # Sprint 8 — Azure Deployment & CI/CD
 
+**Status: 🟡 In progress (Phase 8A complete — packaging only)**
+
 **Goal:** Move the system from local Docker development to cloud deployment.
 
-Planned target infrastructure:
+Sprint 8 is split into phases. **Phase 8A** prepares production packaging
+without provisioning or deploying Azure resources. **Phase 8B** (manual /
+follow-up) will finalize Azure architecture and actual deployment.
+
+## Phase 8A — Production Packaging & Deployment Foundation ✅
+
+- ✅ Backend production `Dockerfile` (Python 3.12 + uv + uvicorn)
+- ✅ Build context is **repository root** so MCP is packaged in the same image
+- ✅ Linux production deps resolve **CPU-only PyTorch** (no CUDA/NVIDIA wheels)
+- ✅ Root `.dockerignore` (excludes secrets, venvs, frontend, caches, tests)
+- ✅ Environment-driven config for container runtime (CORS, DB, Redis,
+  Qdrant, Azure OpenAI, Langfuse, optional `MCP_SERVER_DIR`)
+- ✅ Health (`/health`) and readiness (`/ready`) remain cloud-compatible
+  - liveness: process alive (does **not** require Azure OpenAI or Langfuse)
+  - readiness: PostgreSQL + Qdrant hard; Redis soft/degraded (RAG cache +
+    agent rate limiting fail open)
+- ✅ Redis used for tenant-aware RAG response caching and agent rate limiting
+  (not application state / checkpoints)
+- ✅ Frontend production API base URL via `VITE_API_BASE_URL` (Vite build-time)
+- ✅ CI container **build-only** validation (no push, no Azure credentials)
+- ⬜ FastAPI backend / React frontend not yet deployed to Azure
+- ⬜ No new application-hosting Azure resources provisioned in Phase 8A
+  (existing Azure AI Foundry, Application Insights, and Log Analytics remain
+  in use for model/observability work)
+
+## Phase 8B — Azure Provisioning & Deployment (planned / preparation started)
+
+**Cost constraint:** target fixed monthly infrastructure cost ≈ **$0** for this
+portfolio/demo project. Prefer free tiers / scale-to-zero. Avoid AKS, GPU,
+always-on compute, paid Azure PostgreSQL, Azure Managed Redis, premium
+networking, and duplicate monitoring.
+
+Intended low-cost direction (**not provisioned yet**):
 
 ```text
-FastAPI          → Azure-hosted compute
-PostgreSQL       → Azure Database for PostgreSQL
-File Storage     → Azure Blob Storage
-Embeddings / LLM → Azure OpenAI / Microsoft Foundry
-Qdrant           → Qdrant Cloud or managed deployment
-Redis            → Managed Redis
-Observability    → Langfuse / OpenTelemetry
+Frontend         → Azure Static Web Apps Free
+Backend          → Azure Container Apps Consumption (minReplicas = 0)
+Embeddings / LLM → existing Azure AI Foundry / Azure OpenAI
+Observability    → existing Langfuse + Application Insights / Log Analytics
+PostgreSQL       → Neon Free (application data + LangGraph checkpoints)
+Qdrant           → Qdrant Cloud Free
+Redis            → Upstash Redis Free (rediss://) — RAG cache + rate limiting
+Document files   → local path for now; Azure Blob later
 ```
 
-Tasks:
+Preparation completed in-repo (no cloud accounts created):
 
-- ⬜ Production Docker images
-- ⬜ Azure infrastructure
-- ⬜ Secret management
-- ⬜ Production environment configuration
-- ⬜ Database migration deployment
-- ⬜ CI/CD deployment pipeline
-- ⬜ Health/readiness deployment checks
-- ⬜ HTTPS / production networking
-- ⬜ Cloud persistence verification
+- ✅ Env placeholders for Neon / Qdrant API key / Upstash `rediss://` / CORS
+- ✅ Split env model: `.env.development` vs `.env.production` (gitignored);
+  explicit `uv run --env-file ...` (no silent shared `.env` auto-load)
+- ✅ `CHECKPOINT_BACKEND=memory|postgres` (Postgres uses same `DATABASE_URL`)
+- ✅ Qdrant client supports optional `QDRANT_API_KEY`
+- ✅ Redis client accepts TLS URLs (`rediss://`) via `Redis.from_url`
+- ✅ SWA SPA config: `frontend/public/staticwebapp.config.json`
+- ✅ Runbook: `docs/phase-8b-runbook.md`
+
+Still planned (manual):
+
+- ⬜ Create Neon / Qdrant Cloud / Upstash free resources
+- ⬜ Application hosting (Static Web Apps / Container Apps)
+- ⬜ Secret management in Azure
+- ⬜ `uv run --env-file .env.production alembic upgrade head` against Neon
+- ⬜ Deploy Container Apps (`minReplicas=0`) + Static Web Apps
+- ⬜ Wire production `VITE_API_BASE_URL` at frontend build time
+- ⬜ Persistent document storage (Azure Blob)
+- ⬜ Enable deploy workflow only after credentials exist
+
+**Sprint 8 is not complete** until Phase 8B deployment work is finished.
 
 ---
 

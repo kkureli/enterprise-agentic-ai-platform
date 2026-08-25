@@ -20,7 +20,9 @@ dependencies = [
     "langchain-text-splitters>=1.1.2",
     "langfuse>=4.14.5",
     "langgraph>=1.2.11",
+    "langgraph-checkpoint-postgres>=2.0.0",
     "mcp>=2.0.0",
+    "psycopg[binary]>=3.2.0",
     "pydantic-settings>=2.15.0",
     "pypdf>=6.16.1",
     "python-dotenv>=1.2.3",
@@ -30,6 +32,8 @@ dependencies = [
     "sentence-transformers>=6.0.0",
     "sqlalchemy>=2.0.52",
     "sqlglot>=30.17.0",
+    # Explicit so Linux production resolves from the PyTorch CPU index.
+    "torch>=2.13.0",
     "uvicorn[standard]>=0.52.4",
 ]
 
@@ -40,6 +44,19 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "ruff>=0.16.4",
 ]
+
+# Linux/Windows production images use CPU-only PyTorch wheels (no CUDA/NVIDIA).
+# macOS continues to use the default PyPI torch wheels.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
 [tool.ruff]
 line-length = 100
 
@@ -49,3 +66,6 @@ select = ["E", "F", "I", "B", "BLE"]
 [tool.ruff.lint.per-file-ignores]
 "app/api/**/*.py" = ["B008"]
 "app/core/readiness.py" = ["BLE001"]
+"app/services/redis_service.py" = ["BLE001"]
+"app/services/rag_cache_service.py" = ["BLE001"]
+"app/services/rate_limit_service.py" = ["BLE001"]

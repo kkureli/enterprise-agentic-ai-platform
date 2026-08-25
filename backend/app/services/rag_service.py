@@ -4,6 +4,10 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.services.llm_service import get_chat_model
+from app.services.rag_cache_service import (
+    get_cached_rag_result,
+    set_cached_rag_result,
+)
 from app.services.rag_retrieval_service import RetrievalMode, retrieve_for_rag_mode
 from app.services.retrieval_service import RetrievalFilters, RetrievedChunk
 
@@ -71,6 +75,17 @@ async def answer_question(
     filters: RetrievalFilters | None = None,
     retrieval_mode: RetrievalMode = "standard",
 ) -> RagResult:
+    cached = await get_cached_rag_result(
+        tenant_id=tenant_id,
+        question=question,
+        limit=limit,
+        retrieval_mode=retrieval_mode,
+        filters=filters,
+    )
+
+    if cached is not None:
+        return cached
+
     chunks = await retrieve_for_rag_mode(
         tenant_id=tenant_id,
         query=question,
@@ -80,11 +95,20 @@ async def answer_question(
     )
 
     if not chunks:
-        return RagResult(
+        result = RagResult(
             answer=("The provided documents do not contain enough information."),
             sources=[],
             retrieved_chunks=[],
         )
+        await set_cached_rag_result(
+            tenant_id=tenant_id,
+            question=question,
+            result=result,
+            limit=limit,
+            retrieval_mode=retrieval_mode,
+            filters=filters,
+        )
+        return result
 
     context = build_context(chunks)
 
@@ -98,7 +122,7 @@ Context:
 
     model = get_chat_model().with_structured_output(GroundedAnswer)
 
-    result = await model.ainvoke(
+    grounded = await model.ainvoke(
         [
             ("system", SYSTEM_PROMPT),
             ("human", user_prompt),
@@ -107,7 +131,7 @@ Context:
 
     valid_source_ids: list[int] = []
 
-    for source_id in result.used_sources:
+    for source_id in grounded.used_sources:
         if 1 <= source_id <= len(chunks):
             if source_id not in valid_source_ids:
                 valid_source_ids.append(source_id)
@@ -137,8 +161,19 @@ Context:
         for chunk in chunks
     ]
 
-    return RagResult(
-        answer=result.answer,
+    result = RagResult(
+        answer=grounded.answer,
         sources=sources,
         retrieved_chunks=retrieved_chunks,
     )
+
+    await set_cached_rag_result(
+        tenant_id=tenant_id,
+        question=question,
+        result=result,
+        limit=limit,
+        retrieval_mode=retrieval_mode,
+        filters=filters,
+    )
+
+    return result
