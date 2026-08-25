@@ -94,21 +94,21 @@ export function OrchestrationExplorer() {
       </div>
 
       <div className="rag-explorer__layout">
-        <div className="rag-flow" role="list">
+        <div className="rag-flow" role="list" aria-label="Orchestration stages">
           {ORCHESTRATION_NODES.map((node, index) => (
-            <div key={node.id} role="listitem">
+            <div key={node.id} className="rag-flow__item" role="listitem">
               <button
                 type="button"
                 className={
-                  selectedId === node.id
-                    ? 'rag-flow__node rag-flow__node--selected'
-                    : 'rag-flow__node'
+                  selectedId === node.id ? 'rag-node rag-node--selected' : 'rag-node'
                 }
                 onClick={() => selectNode(node.id)}
                 aria-pressed={selectedId === node.id}
               >
-                <span className="rag-flow__node-label">{node.shortLabel}</span>
-                <span className="rag-flow__node-name">{node.name}</span>
+                <span className="rag-node__name">{node.name}</span>
+                <span className="rag-node__meta">
+                  <span className="rag-mode-badge rag-mode-badge--both">Orchestration</span>
+                </span>
               </button>
               {index < ORCHESTRATION_NODES.length - 1 ? (
                 <div className="rag-flow__arrow" aria-hidden="true">
@@ -118,7 +118,9 @@ export function OrchestrationExplorer() {
             </div>
           ))}
         </div>
-        <div ref={inspectorRef}>{selected ? <Inspector node={selected} /> : null}</div>
+        <div className="rag-inspector-col" ref={inspectorRef}>
+          {selected ? <Inspector node={selected} /> : null}
+        </div>
       </div>
     </section>
   )
