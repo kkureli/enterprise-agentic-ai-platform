@@ -53,9 +53,12 @@ flowchart TD
   ACA --> Langfuse
 ```
 
-**Deployment path (not request-time):** GitHub Actions → Docker image →
-**GHCR** → (manual / planned OIDC) Azure Container Apps revision. Frontend:
-GitHub Actions → Vite build → Azure Static Web Apps.
+**Deployment path (not request-time):** GitHub Actions Backend CD validates the
+backend, publishes an immutable image to **GHCR**, authenticates to Azure with
+**OIDC** (no client secret), updates the existing Container Apps revision, then
+smoke-tests `/health` and `/ready`. Status: **workflow implemented; one-time
+OIDC setup + first successful run still required** before calling it fully
+operational. Frontend: GitHub Actions → Vite build → Azure Static Web Apps.
 
 Local development still uses Docker Compose for PostgreSQL, Redis, and Qdrant.
 
@@ -418,9 +421,17 @@ Retrieval / agent evaluation runners live under `evals/` (see commands in
 **Backend**
 
 ```text
-GitHub → GitHub Actions → Docker build → GHCR (latest + SHA tags)
-  → Azure Container Apps (currently updated manually / planned OIDC CD)
+GitHub → Backend CD (validate → Docker build)
+  → GHCR immutable tag :sha-<full-git-sha> (+ latest)
+  → Azure OIDC (Environment: production)
+  → az containerapp update (existing app only)
+  → smoke /health + /ready
 ```
+
+Status: workflow implemented; one-time OIDC configuration + first successful
+production run still required before calling auto-CD fully operational.
+See [`docs/phase-8b-runbook.md`](docs/phase-8b-runbook.md) and
+`scripts/setup-azure-github-oidc.sh`.
 
 **Frontend**
 
@@ -437,16 +448,14 @@ Upstash · Azure OpenAI / Foundry · Langfuse.
 
 | Workflow | Behavior |
 |----------|----------|
-| `backend-ci.yml` | Ruff lint · Ruff format check · pytest · Docker **build-only** validation |
-| `backend-image.yml` | Build/push backend image to **GHCR** (`latest` + immutable SHA) |
+| `backend-ci.yml` | Ruff lint · Ruff format check · pytest · Docker **build-only** validation (PR/push) |
+| `backend-cd.yml` | Production chain on `master` path changes / `workflow_dispatch`: validate → GHCR SHA image → Azure OIDC → ACA update → smoke tests |
+| `backend-image.yml` | Ad-hoc GHCR publish only (`workflow_dispatch`) — does not race CD |
 | `azure-static-web-apps-*.yml` | Build/deploy frontend to **Static Web Apps** |
 
-**Important:** pushing to `master` publishes a backend image to GHCR and can
-deploy the frontend via SWA, but **full Container Apps CD automation
-(Azure OIDC → new revision) is still planned**. `git push` does **not**
-automatically update Container Apps unless that workflow is added and wired.
-
-Planned backend CD: tests → image → GHCR → Azure OIDC → Container Apps revision.
+**Important:** Backend CD will update Container Apps only after GitHub
+Environment `production` OIDC variables are configured and a real run
+succeeds. Until then, do not claim every backend `git push` already deploys ACA.
 
 ---
 
@@ -456,19 +465,19 @@ Planned backend CD: tests → image → GHCR → Azure OIDC → Container Apps r
 |------|--------|
 | Sprints 0–7 | Complete |
 | Sprint 8 cloud hosting | Largely complete (ACA, SWA, Neon, Qdrant Cloud, Upstash, Postgres checkpoints, playground) |
-| Backend GHCR publish | Complete |
-| Backend ACA auto-deploy | Planned / pending |
+| Backend GHCR publish | Complete (via CD image job / optional manual image workflow) |
+| Backend ACA auto-deploy | **Implemented in repo** — pending OIDC setup + first successful run |
 | Latest local frontend UX polish | Implemented in working tree; not claimed live until commit + SWA deploy |
 
 Feature scope for the core platform is largely sufficient. Near-term priority
-is deployment reliability, backend CD automation, docs/demo polish, and
-evidence — not new AI frameworks.
+is finishing backend CD OIDC wiring, docs/demo polish, and evidence — not new
+AI frameworks.
 
 ---
 
 ## Roadmap
 
-1. Backend full CD (GitHub Actions + Azure OIDC → Container Apps)
+1. Complete Backend CD go-live (one-time Azure/GitHub OIDC + first successful ACA deploy)
 2. Commit/deploy latest playground UX polish + smoke test production
 3. Portfolio evidence (screenshots, short demo video, CV bullets)
 4. Optional: Azure Blob durable document storage

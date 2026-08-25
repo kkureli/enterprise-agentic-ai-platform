@@ -164,7 +164,7 @@ tenants, cost controls, and CI/CD.
 
 | Item | Status |
 |------|--------|
-| Backend full CD: GHCR → Azure OIDC → Container Apps revision | PLANNED / PENDING |
+| Backend full CD: GHCR → Azure OIDC → Container Apps revision | **IMPLEMENTED in repo** — pending one-time OIDC config + first successful production run |
 | Commit + SWA deploy of latest local frontend UX polish (cold-start tenant loading states, retrieval-mode education, Architecture RAG Pipeline Explorer) | PENDING (present in local working tree; not claimed live) |
 | Final production smoke test after frontend polish lands | PENDING |
 | README / architecture / runbook accuracy pass | IN PROGRESS |
@@ -174,9 +174,12 @@ tenants, cost controls, and CI/CD.
 **Important CI/CD truth**
 
 - Frontend: push/PR workflows can deploy Static Web Apps
-- Backend image: push to `master` (paths filter) publishes to GHCR
-- Backend Container Apps revision update is **not** fully automated yet —
-  do not claim `git push` alone updates ACA
+- Backend CD workflow (`.github/workflows/backend-cd.yml`):
+  validate → GHCR `:sha-<git-sha>` → Azure OIDC → ACA image update → smoke tests
+- Backend CD is **not fully operational** until GitHub Environment `production`
+  OIDC variables are configured and one real deploy succeeds
+- Ad-hoc GHCR publish: `backend-image.yml` (`workflow_dispatch` only)
+- Do not claim every `git push` already updates ACA until that first CD run passes
 
 ## Known Sprint 8 limitations (still true)
 
@@ -238,7 +241,8 @@ Browser
        ├── Azure OpenAI / Foundry
        └── Langfuse
 
-GitHub Actions → GHCR (backend image)
+GitHub Actions → GHCR (immutable SHA image)
+  → Azure OIDC (Environment: production) → ACA revision → smoke tests
 GitHub Actions → Static Web Apps (frontend)
 ```
 

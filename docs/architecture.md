@@ -491,7 +491,8 @@ LLM final answer → tool_answer → Finalize
 
 - JWT / RBAC / authenticated public product layer
 - Durable Azure Blob storage for uploaded original files
-- Full backend Container Apps CD (Azure OIDC → revision); GHCR publish exists
+- Full backend Container Apps CD go-live (OIDC wired + first successful run);
+  workflow implemented in `.github/workflows/backend-cd.yml`
 - OpenTelemetry (Langfuse is implemented; OTel remains planned)
 - CI-enforced evaluation regression gates
 - Real external enterprise APIs beyond local PostgreSQL + MCP demo data
@@ -733,8 +734,9 @@ docker build -f backend/Dockerfile -t enterprise-agentic-ai-backend .
   `uv run --env-file .env.development|production ...` (no silent shared `.env`)
 - Frontend uses Vite mode files (`.env.development` / `.env.production`) and
   build-time `VITE_API_BASE_URL` (no frontend Docker image)
-- CI: Ruff + pytest; Docker build validation; GHCR image publish on backend
-  path changes; Static Web Apps frontend deploy workflow
+- CI: Ruff + pytest; Docker build validation; Backend CD
+  (`backend-cd.yml`: validate → GHCR SHA → Azure OIDC → ACA → smoke);
+  Static Web Apps frontend deploy workflow
 
 ### Azure status
 
@@ -751,15 +753,18 @@ playground:
 | Redis | Upstash Free (`REDIS_URL=rediss://...`) — RAG cache + rate / demo budget guards |
 | LLM | Existing Azure AI Foundry / Azure OpenAI |
 | Observability | Existing Langfuse (+ App Insights / Log Analytics where used) |
-| Registry | GHCR (`backend-image.yml`) |
+| Registry | GHCR (`backend-cd.yml` / optional `backend-image.yml`) |
 
 Local default remains `CHECKPOINT_BACKEND=memory` (`InMemorySaver`).
 Production selects PostgreSQL-backed LangGraph checkpoints without a second
 database. See `docs/phase-8b-runbook.md` for env and operational steps.
 
-**Remaining:** backend full CD (GHCR → Azure OIDC → Container Apps revision).
-Frontend Static Web Apps deploy workflow already exists. Latest local frontend
-UX polish must be committed before it is live on SWA.
+**Remaining for Backend CD go-live:** one-time GitHub Environment `production`
+OIDC variables + Azure federated credential
+(`scripts/setup-azure-github-oidc.sh`), then first successful
+`backend-cd.yml` run. Workflow code is in-repo. Frontend Static Web Apps deploy
+already exists. Latest local frontend UX polish must be committed before it is
+live on SWA.
 
 After Neon `DATABASE_URL` is configured:
 

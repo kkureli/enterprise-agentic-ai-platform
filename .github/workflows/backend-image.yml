@@ -1,16 +1,10 @@
+# Manual / ad-hoc GHCR publish only.
+# Production master deploys are owned by backend-cd.yml (validate → push → ACA).
+# Keeping push-to-master here would race with Backend CD.
+
 name: Backend Image
 
 on:
-  push:
-    branches:
-      - master
-    paths:
-      - "backend/**"
-      - "mcp/**"
-      - "backend/Dockerfile"
-      - "backend/uv.lock"
-      - "backend/pyproject.toml"
-      - ".github/workflows/backend-image.yml"
   workflow_dispatch:
 
 permissions:
@@ -42,8 +36,9 @@ jobs:
         with:
           images: ghcr.io/kkureli/enterprise-agentic-ai-platform-backend
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,format=short
+            type=raw,value=latest
+            type=sha,format=long,prefix=sha-
+            type=sha,format=short,prefix=sha-
 
       - name: Build and push backend image
         uses: docker/build-push-action@v6

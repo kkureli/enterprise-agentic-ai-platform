@@ -1,0 +1,283 @@
+# Backend production Continuous Deployment
+#
+# Chain: validate → GHCR immutable image → Azure OIDC → ACA revision → smoke tests
+#
+# Requires one-time GitHub Environment `production` variables + Azure federated
+# identity (see docs/phase-8b-runbook.md and scripts/setup-azure-github-oidc.sh).
+# This workflow does not create Azure resources or rotate app secrets.
+
+name: Backend CD
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "backend/**"
+      - "mcp/**"
+      - ".dockerignore"
+      - ".github/workflows/backend-cd.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: backend-production
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: kkureli/enterprise-agentic-ai-platform-backend
+
+jobs:
+  validate:
+    name: Validate backend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: "postgresql+asyncpg://postgres:postgres@localhost:5432/agentic_ai_test"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agentic_ai_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d agentic_ai_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --dev --frozen
+
+      - name: Ruff lint
+        run: uv run ruff check app tests
+
+      - name: Ruff format check
+        run: uv run ruff format --check app tests
+
+      - name: Run tests
+        run: uv run pytest -q
+
+  image:
+    name: Build and push GHCR image
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.tags.outputs.image }}
+      short_sha: ${{ steps.tags.outputs.short_sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Derive immutable image tags
+        id: tags
+        run: |
+          SHORT_SHA="${GITHUB_SHA::12}"
+          IMAGE="${REGISTRY}/${IMAGE_NAME}"
+          SHA_TAG="${IMAGE}:sha-${GITHUB_SHA}"
+          SHORT_TAG="${IMAGE}:sha-${SHORT_SHA}"
+          {
+            echo "short_sha=${SHORT_SHA}"
+            echo "image=${SHA_TAG}"
+            echo "tags<<EOF"
+            echo "${SHA_TAG}"
+            echo "${SHORT_TAG}"
+            echo "${IMAGE}:latest"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/kkureli/enterprise-agentic-ai-platform
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=enterprise-agentic-ai-platform-backend
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy Azure Container App
+    needs: image
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE: ${{ needs.image.outputs.image }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_CONTAINER_APP: ${{ vars.AZURE_CONTAINER_APP }}
+      BACKEND_BASE_URL: ${{ vars.AZURE_CONTAINER_APP_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate deployment configuration
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_RESOURCE_GROUP AZURE_CONTAINER_APP BACKEND_BASE_URL IMAGE; do
+            eval "value=\${$name:-}"
+            if [ -z "${value}" ]; then
+              echo "::error::Missing required configuration: ${name}"
+              missing=1
+            fi
+          done
+          if [ "${missing}" -ne 0 ]; then
+            echo "Configure GitHub Environment 'production' variables before deploying."
+            echo "See docs/phase-8b-runbook.md (Backend CD / OIDC) and scripts/setup-azure-github-oidc.sh."
+            exit 1
+          fi
+          echo "Deploy target: ${AZURE_CONTAINER_APP} / ${AZURE_RESOURCE_GROUP}"
+          echo "Image: ${IMAGE}"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Update Container App image
+        id: update
+        run: |
+          set -euo pipefail
+          echo "Updating ${AZURE_CONTAINER_APP} to ${IMAGE}"
+          az containerapp update \
+            --name "${AZURE_CONTAINER_APP}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --image "${IMAGE}" \
+            --output none
+
+          LATEST="$(az containerapp revision list \
+            --name "${AZURE_CONTAINER_APP}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --query "reverse(sort_by([].{name:name,created:properties.createdTime}, &created))[0].name" \
+            -o tsv)"
+          echo "latest_revision=${LATEST}" >> "$GITHUB_OUTPUT"
+          echo "Latest revision: ${LATEST}"
+
+      - name: Smoke test /health and /ready
+        id: smoke
+        run: |
+          set -euo pipefail
+          BASE_URL="${BACKEND_BASE_URL%/}"
+          health_ok=0
+          ready_ok=0
+
+          echo "Waiting for /health (cold start allowed, bounded ~120s)…"
+          for i in $(seq 1 24); do
+            code="$(curl -sS -o /tmp/aca-health.json -w "%{http_code}" --max-time 20 "${BASE_URL}/health" || true)"
+            if [ "${code}" = "200" ]; then
+              health_ok=1
+              echo "Health PASS (attempt ${i})"
+              break
+            fi
+            echo "Health attempt ${i}: HTTP ${code:-000}"
+            sleep 5
+          done
+
+          if [ "${health_ok}" -ne 1 ]; then
+            echo "::error::Health check failed after bounded retries"
+            echo "health=FAIL" >> "$GITHUB_OUTPUT"
+            echo "ready=FAIL" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "health=PASS" >> "$GITHUB_OUTPUT"
+
+          echo "Checking /ready…"
+          for i in $(seq 1 12); do
+            code="$(curl -sS -o /tmp/aca-ready.json -w "%{http_code}" --max-time 30 "${BASE_URL}/ready" || true)"
+            if [ "${code}" = "200" ]; then
+              ready_ok=1
+              echo "Readiness PASS (attempt ${i})"
+              cat /tmp/aca-ready.json || true
+              echo
+              break
+            fi
+            echo "Ready attempt ${i}: HTTP ${code:-000}"
+            if [ -f /tmp/aca-ready.json ]; then
+              head -c 500 /tmp/aca-ready.json || true
+              echo
+            fi
+            sleep 5
+          done
+
+          if [ "${ready_ok}" -ne 1 ]; then
+            echo "::error::Readiness check failed after bounded retries"
+            echo "ready=FAIL" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "ready=PASS" >> "$GITHUB_OUTPUT"
+
+      - name: Diagnose failed deployment
+        if: failure()
+        run: |
+          set +e
+          echo "## Non-secret Container App diagnostics"
+          az containerapp show \
+            --name "${AZURE_CONTAINER_APP}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --query "{name:name,runningStatus:properties.runningStatus,latestRevision:properties.latestRevisionName,provisioningState:properties.provisioningState}" \
+            -o json
+          echo
+          az containerapp revision list \
+            --name "${AZURE_CONTAINER_APP}" \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --query "reverse(sort_by([].{name:name,active:properties.active,runningState:properties.runningState,created:properties.createdTime,traffic:properties.trafficWeight}, &created))[:5]" \
+            -o table
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Backend production deployment"
+            echo ""
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Image: \`${IMAGE}\`"
+            echo "- Container App: \`${AZURE_CONTAINER_APP}\`"
+            echo "- Resource group: \`${AZURE_RESOURCE_GROUP}\`"
+            echo "- Revision: \`${{ steps.update.outputs.latest_revision || 'n/a' }}\`"
+            echo "- Health: \`${{ steps.smoke.outputs.health || 'n/a' }}\`"
+            echo "- Readiness: \`${{ steps.smoke.outputs.ready || 'n/a' }}\`"
+            echo ""
+            echo "Registry credentials and app env vars were not modified."
+          } >> "$GITHUB_STEP_SUMMARY"

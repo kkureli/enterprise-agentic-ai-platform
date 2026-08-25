@@ -5,9 +5,11 @@ public playground (Azure Container Apps, Static Web Apps, Neon, Qdrant Cloud,
 Upstash). This runbook remains the operational reference for env vars, cost
 controls, migrations, and remaining automation gaps.
 
-**Still pending:** full backend Container Apps CD via GitHub Actions + Azure
-OIDC (image publish to GHCR already exists). Treat ACA revision updates as
-manual / planned automation until that workflow ships.
+**Still pending:** one-time Azure GitHub OIDC configuration and the first
+successful production Backend CD run. Workflow code for
+`validate → GHCR SHA image → ACA revision → smoke tests` is implemented in
+`.github/workflows/backend-cd.yml`. Until OIDC is configured and a real run
+passes, do not treat backend auto-CD as fully operational.
 
 Target fixed monthly infrastructure cost ≈ **$0**.
 
@@ -174,32 +176,96 @@ npm run build
 
 `frontend/public/staticwebapp.config.json` provides SPA navigation fallback.
 
-## Future Azure CLI sketch (do not run until accounts exist)
+Do **not** assume Azure / Neon / Qdrant / Upstash credentials are absent — the
+public playground stack is already wired. Frontend deploys via Static Web Apps.
+Backend production CD is implemented in GitHub Actions
+(`.github/workflows/backend-cd.yml`) but requires one-time OIDC setup before the
+first successful auto-deploy.
 
-These commands are illustrative placeholders only:
+## Backend CD (GitHub Actions → GHCR → Azure OIDC → ACA)
 
-```bash
-# Build/push image to a registry you control, then:
-az containerapp up \
-  --name <app-name> \
-  --resource-group <rg> \
-  --environment <cae> \
-  --image <registry>/enterprise-agentic-ai-backend:<tag> \
-  --target-port 8000 \
-  --ingress external \
-  --min-replicas 0 \
-  --cpu 1.0 \
-  --memory 2.0Gi
+### Pipeline
 
-# Static Web Apps (after GitHub connection / token exists):
-# az staticwebapp create ...
+```text
+push master (backend/** | mcp/** | workflow)
+  → validate (ruff + pytest)
+  → build/push immutable GHCR image :sha-<full-git-sha>
+  → Azure login via OIDC (GitHub Environment: production)
+  → az containerapp update --image <sha tag>  (existing app only)
+  → smoke GET /health then GET /ready (bounded cold-start wait)
 ```
 
-Do **not** assume Azure / Neon / Qdrant / Upstash credentials are absent — the
-public playground stack is already wired. Current CI publishes backend images to
-GHCR and deploys the frontend via Static Web Apps. Full Container Apps CD
-(Azure OIDC → revision) remains planned; keep ACA updates explicit until that
-workflow exists.
+Concurrency group `backend-production` with `cancel-in-progress: false` prevents
+overlapping ACA updates.
+
+`backend-image.yml` is **workflow_dispatch only** (ad-hoc GHCR publish). It no
+longer pushes on `master`, so it cannot race Backend CD.
+
+### GitHub Environment `production` variables
+
+Non-secret identifiers only (no Azure client secret):
+
+| Variable | Example / notes |
+|----------|-----------------|
+| `AZURE_CLIENT_ID` | Entra app (federated) application (client) ID |
+| `AZURE_TENANT_ID` | Directory (tenant) ID |
+| `AZURE_SUBSCRIPTION_ID` | Subscription ID |
+| `AZURE_RESOURCE_GROUP` | `rg-enterprise-agentic-ai` |
+| `AZURE_CONTAINER_APP` | `enterprise-agentic-ai-backend` |
+| `AZURE_CONTAINER_APP_URL` | `https://enterprise-agentic-ai-backend.jollyplant-fb706637.swedencentral.azurecontainerapps.io` |
+
+Create/update via `scripts/setup-azure-github-oidc.sh` or:
+
+```bash
+gh variable set AZURE_CLIENT_ID --env production --body "<appId>"
+# …same for the other variables above
+```
+
+### One-time Azure federated identity
+
+Preferred subject (Environment-scoped):
+
+```text
+repo:kkureli/enterprise-agentic-ai-platform:environment:production
+```
+
+Least-privilege role:
+
+- **Role:** `Container Apps Contributor`
+- **Scope:** the existing Container App resource only
+  `/subscriptions/<sub>/resourceGroups/rg-enterprise-agentic-ai/providers/Microsoft.App/containerApps/enterprise-agentic-ai-backend`
+
+Do **not** grant Owner or subscription-wide Contributor.
+
+Inspect then run (local Azure CLI + `gh`):
+
+```bash
+./scripts/setup-azure-github-oidc.sh
+```
+
+CD updates **only** the image reference. It does not recreate the app,
+environment, ingress, scaling, or application secrets. Existing GHCR pull
+configuration on the Container App is left untouched.
+
+### Smoke tests
+
+After `az containerapp update`:
+
+1. `GET /health` — HTTP 200, retries ~every 5s up to ~120s (cold start)
+2. `GET /ready` — HTTP 200 (Postgres + Qdrant hard deps)
+
+On failure the workflow fails and prints non-secret revision diagnostics.
+
+### Manual rollback
+
+Redeploy a previous immutable tag (do not invent tags):
+
+```bash
+az containerapp update \
+  --name enterprise-agentic-ai-backend \
+  --resource-group rg-enterprise-agentic-ai \
+  --image ghcr.io/kkureli/enterprise-agentic-ai-platform-backend:sha-<PREVIOUS_FULL_GIT_SHA>
+```
 
 ## Document storage
 
