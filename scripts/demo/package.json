@@ -1,0 +1,17 @@
+{
+  "name": "enterprise-agentic-ai-demo-media",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Playwright media capture for README screenshots, preview GIF, and full demo video",
+  "scripts": {
+    "demo:media": "tsx src/run.ts",
+    "postinstall": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^24.13.3",
+    "tsx": "^4.20.5",
+    "typescript": "~5.9.2"
+  }
+}

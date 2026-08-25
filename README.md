@@ -10,9 +10,41 @@ deployment — not a finished commercial SaaS product.
 
 The public UI is the **Enterprise Agentic AI Playground**.
 
+**[Live Demo](https://white-river-0fe20910f.7.azurestaticapps.net)** ·
+**[Watch Demo Video](https://github.com/kkureli/enterprise-agentic-ai-platform/releases/download/demo-v1/enterprise-agentic-ai-demo.mp4)** ·
 More detail: [`docs/project-plan.md`](docs/project-plan.md) ·
 [`docs/architecture.md`](docs/architecture.md) ·
-[`docs/phase-8b-runbook.md`](docs/phase-8b-runbook.md)
+[`docs/phase-8b-runbook.md`](docs/phase-8b-runbook.md) ·
+[`docs/demo-media.md`](docs/demo-media.md)
+
+![Enterprise Agentic AI Playground with Execution Trace](docs/assets/hero-playground.png)
+
+---
+
+## Demo
+
+Short animated preview (Atlas → Borealis E-100 tenant isolation):
+
+![Tenant-isolated RAG answering E-100 differently for two tenants](docs/assets/demo-preview.gif)
+
+The same question — *What does E-100 mean?* — is grounded in each tenant’s own
+indexed knowledge (manufacturing lubrication codes vs cold-chain refrigeration
+codes). Answers are live RAG results, not hardcoded UI strings.
+
+![Tenant-isolated RAG answering E-100 differently for two tenants](docs/assets/tenant-isolation.png)
+
+**Shown in the playground**
+
+- Multi-tenant knowledge RAG with Execution Trace (route, retrieval, sources,
+  latency, tokens, estimated cost)
+- Standard vs Advanced Compare Runs
+- SQL + MCP tool routes and human-in-the-loop write approval
+- Evaluation / regression metrics and RAG Pipeline Explorer
+
+Full ~75s walkthrough:
+[enterprise-agentic-ai-demo.mp4](https://github.com/kkureli/enterprise-agentic-ai-platform/releases/download/demo-v1/enterprise-agentic-ai-demo.mp4)
+(also regenerable under `artifacts/demo/`, gitignored). Regenerate media with
+`./scripts/demo/generate-media.sh`.
 
 ---
 
@@ -96,6 +128,8 @@ The React playground includes:
 Tenant selector loads demo tenants from `GET /api/v1/demo/tenants`. The public
 UI does **not** expose unrestricted document upload.
 
+![Standard versus Advanced retrieval comparison](docs/assets/compare-runs.png)
+
 ---
 
 ## RAG Architecture
@@ -116,6 +150,8 @@ Both **Standard** and **Advanced** modes use:
 - Broader candidate coverage (usually higher latency / compute)
 
 Reranking is **not** Advanced-only.
+
+![RAG Pipeline Explorer](docs/assets/rag-architecture.png)
 
 ### Standard
 

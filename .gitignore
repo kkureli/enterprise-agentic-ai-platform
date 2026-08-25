@@ -25,3 +25,10 @@ build/
 
 # Uploaded files
 backend/storage/
+
+# Demo media working files + large recordings (tracked assets live in docs/assets/)
+artifacts/demo/*
+!artifacts/demo/README.md
+scripts/demo/node_modules/
+scripts/demo/test-results/
+scripts/demo/playwright-report/
