@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -82,9 +83,18 @@ async def get_demo_usage() -> DemoUsageResponse:
     response_model=SystemStatusResponse,
 )
 async def get_system_status() -> SystemStatusResponse:
-    postgres = await check_postgres()
-    qdrant = await check_qdrant()
-    redis = await check_redis() if settings.redis_enabled else False
+    if settings.redis_enabled:
+        postgres, qdrant, redis = await asyncio.gather(
+            check_postgres(),
+            check_qdrant(),
+            check_redis(),
+        )
+    else:
+        postgres, qdrant = await asyncio.gather(
+            check_postgres(),
+            check_qdrant(),
+        )
+        redis = False
 
     def label(ok: bool, *, required: bool = True) -> str:
         if ok:

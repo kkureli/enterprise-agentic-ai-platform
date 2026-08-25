@@ -7,6 +7,7 @@ import { getExamplePrompts } from '../lib/examplePrompts'
 import type { ChatMessage, ExecutionDetails, RetrievalMode } from '../types/agent'
 
 type PlaygroundChatProps = {
+  tenantId: string
   tenantName: string
   messages: ChatMessage[]
   input: string
@@ -26,6 +27,7 @@ type PlaygroundChatProps = {
 }
 
 export function PlaygroundChat({
+  tenantId,
   tenantName,
   messages,
   input,
@@ -88,6 +90,7 @@ export function PlaygroundChat({
               <ChatMessageItem
                 key={message.id}
                 message={message}
+                tenantId={tenantId}
                 onApprovalResolved={onApprovalResolved}
               />
             ))

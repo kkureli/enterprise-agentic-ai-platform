@@ -1,52 +1,51 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { inspectDocument, listDocuments } from '../api/playground'
 import { EmptyBlock, ErrorBlock, LoadingBlock } from '../components/AsyncState'
 import { StatusBadge } from '../components/StatusBadge'
-import type { DocumentInspect, DocumentSummary } from '../types/playground'
+import { useCachedResource } from '../hooks/useCachedResource'
+import {
+  TTL,
+  cacheKeyDocumentInspect,
+  cacheKeyDocuments,
+  cachedFetch,
+} from '../lib/requestCache'
+import type { DocumentInspect } from '../types/playground'
 
 type DocumentsPageProps = {
   tenantId: string
 }
 
-type LoadStatus = 'loading' | 'success' | 'error'
-
 export function DocumentsPage({ tenantId }: DocumentsPageProps) {
-  const [documents, setDocuments] = useState<DocumentSummary[]>([])
+  const {
+    data: documents,
+    error,
+    status,
+    isRefreshing,
+    reload,
+  } = useCachedResource({
+    key: cacheKeyDocuments(tenantId),
+    ttlMs: TTL.documents,
+    fetcher: () => listDocuments(tenantId),
+  })
+
   const [selected, setSelected] = useState<DocumentInspect | null>(null)
-  const [status, setStatus] = useState<LoadStatus>('loading')
   const [inspectingId, setInspectingId] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const load = useCallback(async () => {
-    setStatus('loading')
-    setError(null)
-    setSelected(null)
-
-    try {
-      const items = await listDocuments(tenantId)
-      setDocuments(items)
-      setStatus('success')
-    } catch (err) {
-      setDocuments([])
-      setStatus('error')
-      setError(err instanceof Error ? err.message : 'Failed to load documents.')
-    }
-  }, [tenantId])
-
-  useEffect(() => {
-    void load()
-  }, [load])
+  const [inspectError, setInspectError] = useState<string | null>(null)
 
   async function handleInspect(documentId: string) {
     setInspectingId(documentId)
-    setError(null)
+    setInspectError(null)
 
     try {
-      const detail = await inspectDocument(tenantId, documentId)
+      const detail = await cachedFetch(
+        cacheKeyDocumentInspect(tenantId, documentId),
+        () => inspectDocument(tenantId, documentId),
+        { ttlMs: TTL.documentInspect },
+      )
       setSelected(detail)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to inspect document.')
+      setInspectError(err instanceof Error ? err.message : 'Failed to inspect document.')
     } finally {
       setInspectingId(null)
     }
@@ -59,6 +58,7 @@ export function DocumentsPage({ tenantId }: DocumentsPageProps) {
         <p className="page-header__subtitle">
           Pre-seeded tenant knowledge only. Indexed content is shown from Qdrant chunks — no
           public uploads.
+          {isRefreshing ? ' · Refreshing…' : null}
         </p>
       </header>
 
@@ -70,15 +70,15 @@ export function DocumentsPage({ tenantId }: DocumentsPageProps) {
         <ErrorBlock
           title="Unable to load documents."
           message={error}
-          onRetry={() => void load()}
+          onRetry={() => void reload(true)}
         />
       ) : null}
 
-      {status === 'success' && documents.length === 0 ? (
+      {status === 'success' && (documents?.length ?? 0) === 0 ? (
         <EmptyBlock title="No documents indexed for this tenant yet." />
       ) : null}
 
-      {status === 'success' && documents.length > 0 ? (
+      {status === 'success' && documents && documents.length > 0 ? (
         <div className="document-grid">
           {documents.map((document) => {
             const chunkCount =
@@ -113,7 +113,7 @@ export function DocumentsPage({ tenantId }: DocumentsPageProps) {
         </div>
       ) : null}
 
-      {error && status === 'success' ? <p className="page-error">{error}</p> : null}
+      {inspectError ? <p className="page-error">{inspectError}</p> : null}
 
       {selected ? (
         <section className="document-inspect">

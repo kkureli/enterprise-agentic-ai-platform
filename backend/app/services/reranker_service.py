@@ -2,8 +2,6 @@ import asyncio
 from dataclasses import dataclass
 from functools import lru_cache
 
-from sentence_transformers import CrossEncoder
-
 from app.services.retrieval_service import RetrievedChunk
 
 RERANKER_MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
@@ -20,8 +18,26 @@ class RerankedChunk:
 
 
 @lru_cache
-def get_reranker() -> CrossEncoder:
+def get_reranker():
+    """Lazy-load CrossEncoder so torch/sentence-transformers stay off the cold-start path."""
+
+    from sentence_transformers import CrossEncoder
+
     return CrossEncoder(RERANKER_MODEL_NAME)
+
+
+def _dedupe_chunks(chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
+    unique: list[RetrievedChunk] = []
+    seen: set[tuple[str, int]] = set()
+
+    for chunk in chunks:
+        key = (chunk.document_id, chunk.chunk_index)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(chunk)
+
+    return unique
 
 
 async def rerank_chunks(
@@ -32,9 +48,10 @@ async def rerank_chunks(
     if not chunks:
         return []
 
+    candidates = _dedupe_chunks(chunks)
     model = get_reranker()
 
-    pairs = [(query, chunk.text) for chunk in chunks]
+    pairs = [(query, chunk.text) for chunk in candidates]
 
     scores = await asyncio.to_thread(
         model.predict,
@@ -51,7 +68,7 @@ async def rerank_chunks(
             rerank_score=float(score),
         )
         for chunk, score in zip(
-            chunks,
+            candidates,
             scores,
             strict=True,
         )

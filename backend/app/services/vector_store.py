@@ -16,6 +16,8 @@ from qdrant_client.models import (
 
 from app.core.config import settings
 
+_payload_indexes_ready = False
+
 
 def get_qdrant_client() -> AsyncQdrantClient:
     if settings.qdrant_api_key:
@@ -55,16 +57,32 @@ async def ensure_collection(
             },
         )
 
+    await ensure_payload_indexes(client)
+
+
+async def ensure_payload_indexes(client: AsyncQdrantClient) -> None:
+    """Ensure filterable payload indexes exist for tenant-scoped lookups."""
+
+    global _payload_indexes_ready
+
+    if _payload_indexes_ready:
+        return
+
+    collection_name = settings.qdrant_collection_name
     collection = await client.get_collection(
         collection_name=collection_name,
     )
+    payload_schema = collection.payload_schema or {}
 
-    if "tenant_id" not in collection.payload_schema:
-        await client.create_payload_index(
-            collection_name=collection_name,
-            field_name="tenant_id",
-            field_schema=PayloadSchemaType.KEYWORD,
-        )
+    for field_name in ("tenant_id", "document_id"):
+        if field_name not in payload_schema:
+            await client.create_payload_index(
+                collection_name=collection_name,
+                field_name=field_name,
+                field_schema=PayloadSchemaType.KEYWORD,
+            )
+
+    _payload_indexes_ready = True
 
 
 async def index_document_chunks(
@@ -154,6 +172,8 @@ async def list_document_chunks(
 
         if not exists:
             return []
+
+        await ensure_payload_indexes(client)
 
         query_filter = Filter(
             must=[

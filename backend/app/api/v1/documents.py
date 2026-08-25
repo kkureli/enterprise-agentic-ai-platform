@@ -3,6 +3,7 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from qdrant_client.http.exceptions import UnexpectedResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +16,6 @@ from app.schemas.document import (
     DocumentInspectRead,
     DocumentRead,
 )
-from app.services.document_ingestion import ingest_document
 from app.services.document_parser import DocumentParseError
 from app.services.document_storage import save_document_file
 from app.services.rag_cache_service import increment_rag_cache_version
@@ -75,10 +75,21 @@ async def inspect_document(
             detail="Document not found.",
         )
 
-    chunks = await list_document_chunks(
-        tenant_id=tenant_id,
-        document_id=document_id,
-    )
+    try:
+        chunks = await list_document_chunks(
+            tenant_id=tenant_id,
+            document_id=document_id,
+        )
+    except UnexpectedResponse as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to load indexed document chunks from the vector store.",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to load indexed document chunks from the vector store.",
+        ) from exc
 
     return DocumentInspectRead(
         document=DocumentRead.model_validate(document),
@@ -115,6 +126,8 @@ async def upload_document(
     file_path = Path(settings.document_storage_path) / str(tenant_id) / str(document_id) / filename
 
     try:
+        from app.services.document_ingestion import ingest_document
+
         await ingest_document(
             tenant_id=tenant_id,
             document_id=document_id,

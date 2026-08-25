@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 import {
   ADVANCED_CAPABILITIES,
@@ -10,6 +11,10 @@ import {
   STANDARD_SUMMARY,
   type PipelineStep,
 } from '../lib/retrievalModes'
+
+const POPOVER_GAP = 8
+const VIEWPORT_PAD = 12
+const POPOVER_MAX_WIDTH = 576
 
 function PipelineFlow({ steps, label }: { steps: PipelineStep[]; label: string }) {
   return (
@@ -56,14 +61,68 @@ function ModePanel({
   )
 }
 
+function positionPopover(trigger: DOMRect, panel: HTMLElement): CSSProperties {
+  const width = Math.min(POPOVER_MAX_WIDTH, window.innerWidth - VIEWPORT_PAD * 2)
+  const height = panel.offsetHeight
+  const spaceBelow = window.innerHeight - trigger.bottom - VIEWPORT_PAD
+  const spaceAbove = trigger.top - VIEWPORT_PAD
+  const placeAbove = spaceBelow < height + POPOVER_GAP && spaceAbove > spaceBelow
+
+  let top = placeAbove ? trigger.top - height - POPOVER_GAP : trigger.bottom + POPOVER_GAP
+  top = Math.max(VIEWPORT_PAD, Math.min(top, window.innerHeight - height - VIEWPORT_PAD))
+
+  // Prefer aligning to the trigger's left edge; clamp into the viewport.
+  let left = trigger.left
+  left = Math.max(VIEWPORT_PAD, Math.min(left, window.innerWidth - width - VIEWPORT_PAD))
+
+  return {
+    position: 'fixed',
+    top,
+    left,
+    width,
+    right: 'auto',
+  }
+}
+
 type RetrievalModeInfoProps = {
   compact?: boolean
 }
 
 export function RetrievalModeInfo({ compact }: RetrievalModeInfoProps) {
   const [open, setOpen] = useState(false)
+  const [style, setStyle] = useState<CSSProperties | undefined>()
   const rootRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const panelId = useId()
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setStyle(undefined)
+      return
+    }
+
+    if (!triggerRef.current || !panelRef.current) {
+      return
+    }
+
+    function updatePosition() {
+      if (!triggerRef.current || !panelRef.current) {
+        return
+      }
+      setStyle(positionPopover(triggerRef.current.getBoundingClientRect(), panelRef.current))
+    }
+
+    updatePosition()
+
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open) {
@@ -71,9 +130,11 @@ export function RetrievalModeInfo({ compact }: RetrievalModeInfoProps) {
     }
 
     function handlePointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false)
+      const target = event.target as Node
+      if (rootRef.current?.contains(target) || panelRef.current?.contains(target)) {
+        return
       }
+      setOpen(false)
     }
 
     function handleKeyDown(event: KeyboardEvent) {
@@ -91,9 +152,39 @@ export function RetrievalModeInfo({ compact }: RetrievalModeInfoProps) {
     }
   }, [open])
 
+  const popover = open ? (
+    <div
+      ref={panelRef}
+      id={panelId}
+      className="retrieval-info__popover"
+      role="dialog"
+      aria-label="Retrieval mode explanation"
+      style={{ ...style, visibility: style ? 'visible' : 'hidden' }}
+    >
+      <div className="retrieval-info__modes">
+        <ModePanel
+          title="Standard"
+          summary={STANDARD_SUMMARY}
+          capabilities={STANDARD_CAPABILITIES}
+          pipeline={STANDARD_PIPELINE}
+          pipelineLabel="Standard retrieval pipeline"
+        />
+        <ModePanel
+          title="Advanced"
+          summary={ADVANCED_SUMMARY}
+          capabilities={ADVANCED_CAPABILITIES}
+          pipeline={ADVANCED_PIPELINE}
+          pipelineLabel="Advanced retrieval pipeline"
+        />
+      </div>
+      <p className="retrieval-info__note">{RETRIEVAL_TRADEOFF_NOTE}</p>
+    </div>
+  ) : null
+
   return (
     <div className={compact ? 'retrieval-info retrieval-info--compact' : 'retrieval-info'} ref={rootRef}>
       <button
+        ref={triggerRef}
         type="button"
         className="retrieval-info__trigger"
         aria-label="Explain retrieval modes"
@@ -104,32 +195,7 @@ export function RetrievalModeInfo({ compact }: RetrievalModeInfoProps) {
         <span aria-hidden="true">ⓘ</span>
       </button>
 
-      {open ? (
-        <div
-          id={panelId}
-          className="retrieval-info__popover"
-          role="dialog"
-          aria-label="Retrieval mode explanation"
-        >
-          <div className="retrieval-info__modes">
-            <ModePanel
-              title="Standard"
-              summary={STANDARD_SUMMARY}
-              capabilities={STANDARD_CAPABILITIES}
-              pipeline={STANDARD_PIPELINE}
-              pipelineLabel="Standard retrieval pipeline"
-            />
-            <ModePanel
-              title="Advanced"
-              summary={ADVANCED_SUMMARY}
-              capabilities={ADVANCED_CAPABILITIES}
-              pipeline={ADVANCED_PIPELINE}
-              pipelineLabel="Advanced retrieval pipeline"
-            />
-          </div>
-          <p className="retrieval-info__note">{RETRIEVAL_TRADEOFF_NOTE}</p>
-        </div>
-      ) : null}
+      {popover ? createPortal(popover, document.body) : null}
     </div>
   )
 }

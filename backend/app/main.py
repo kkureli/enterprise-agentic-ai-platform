@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -80,9 +81,11 @@ async def health_check():
 
 @app.get("/ready")
 async def readiness_check():
-    postgres = await check_postgres()
-    redis = await check_redis()
-    qdrant = await check_qdrant()
+    postgres, redis, qdrant = await asyncio.gather(
+        check_postgres(),
+        check_redis(),
+        check_qdrant(),
+    )
 
     services = {
         "postgres": postgres,

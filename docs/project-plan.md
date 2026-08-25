@@ -183,7 +183,9 @@ tenants, cost controls, and CI/CD.
 - Seeded synthetic enterprise data
 - MCP demo/simulated tools
 - Local/container filesystem document storage (not Blob)
-- ACA cold starts from `minReplicas=0`
+- ACA cold starts from `minReplicas=0` (accepted cost tradeoff; no keep-alive)
+- Playground warm navigation uses client-side request caching; Architecture /
+  Evaluation / Status do not wait on tenant APIs
 - Cost controls reduce risk; they do not guarantee zero spend
 
 ---

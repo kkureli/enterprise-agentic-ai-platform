@@ -127,6 +127,8 @@ function Kv({
 }
 
 export function ExecutionTrace({ details }: ExecutionTraceProps) {
+  const [open, setOpen] = useState(false)
+
   if (!details) {
     return null
   }
@@ -150,9 +152,13 @@ export function ExecutionTrace({ details }: ExecutionTraceProps) {
     cost?.estimated_total_cost_usd != null
 
   return (
-    <details className="execution-trace">
+    <details
+      className="execution-trace"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
       <summary className="execution-trace__summary">Execution Trace</summary>
 
+      {open ? (
       <div className="execution-trace__body">
         {hasOverview ? (
           <Section title="Overview">
@@ -351,6 +357,7 @@ export function ExecutionTrace({ details }: ExecutionTraceProps) {
           </Section>
         ) : null}
       </div>
+      ) : null}
     </details>
   )
 }

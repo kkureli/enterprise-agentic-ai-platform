@@ -1,4 +1,4 @@
-import { getApiBaseUrl, getTenantId } from './config'
+import { getApiBaseUrl } from './config'
 import { PlaygroundApiError } from './playground'
 import type { AgentResponse } from '../types/agent'
 
@@ -97,14 +97,17 @@ export async function fetchSystemStatus(): Promise<SystemStatus> {
   return parseJson<SystemStatus>(response)
 }
 
-export async function compareAgentRuns(question: string): Promise<CompareResponse> {
-  const tenantId = getTenantId()
+export async function compareAgentRuns(
+  tenantId: string,
+  question: string,
+): Promise<CompareResponse> {
+  const id = tenantId.trim()
 
-  if (!tenantId) {
+  if (!id) {
     throw new PlaygroundApiError('Tenant is not selected.', 0)
   }
 
-  const response = await fetch(`${getApiBaseUrl()}/tenants/${tenantId}/agent/compare`, {
+  const response = await fetch(`${getApiBaseUrl()}/tenants/${id}/agent/compare`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question }),

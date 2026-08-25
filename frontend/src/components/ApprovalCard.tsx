@@ -4,6 +4,7 @@ import { approveAgentAction, AgentApiError } from '../api/agent'
 import type { ExecutionDetails, PendingAction } from '../types/agent'
 
 type ApprovalCardProps = {
+  tenantId: string
   threadId: string
   pendingAction: PendingAction
   onResolved: (
@@ -25,7 +26,12 @@ function formatActionTitle(toolName: string): string {
   return `Approve action: ${toolName.replaceAll('_', ' ')}`
 }
 
-export function ApprovalCard({ threadId, pendingAction, onResolved }: ApprovalCardProps) {
+export function ApprovalCard({
+  tenantId,
+  threadId,
+  pendingAction,
+  onResolved,
+}: ApprovalCardProps) {
   const [pending, setPending] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
 
@@ -36,7 +42,7 @@ export function ApprovalCard({ threadId, pendingAction, onResolved }: ApprovalCa
     setLocalError(null)
 
     try {
-      const response = await approveAgentAction(threadId, approved)
+      const response = await approveAgentAction(tenantId, threadId, approved)
       onResolved(approved, response.answer, response.execution_details)
     } catch (error) {
       const message =

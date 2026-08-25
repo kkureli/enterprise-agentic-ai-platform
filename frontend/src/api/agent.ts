@@ -1,4 +1,4 @@
-import { getApiBaseUrl, getTenantId } from './config'
+import { getApiBaseUrl } from './config'
 import type { AgentResponse, RetrievalMode } from '../types/agent'
 
 export class AgentApiError extends Error {
@@ -13,17 +13,14 @@ export class AgentApiError extends Error {
   }
 }
 
-function tenantPath(): string {
-  const tenantId = getTenantId()
+function tenantPath(tenantId: string): string {
+  const id = tenantId.trim()
 
-  if (!tenantId) {
-    throw new AgentApiError(
-      'Tenant ID is not configured. Set VITE_TENANT_ID or enter a tenant ID in settings.',
-      0,
-    )
+  if (!id) {
+    throw new AgentApiError('Tenant is not selected.', 0)
   }
 
-  return `${getApiBaseUrl()}/tenants/${tenantId}/agent`
+  return `${getApiBaseUrl()}/tenants/${id}/agent`
 }
 
 async function parseAgentResponse(response: Response): Promise<AgentResponse> {
@@ -100,13 +97,14 @@ function mapHttpError(detail: string, status: number, retryAfter?: number): stri
 }
 
 export async function runAgent(
+  tenantId: string,
   question: string,
   retrievalMode: RetrievalMode,
 ): Promise<AgentResponse> {
   let response: Response
 
   try {
-    response = await fetch(tenantPath(), {
+    response = await fetch(tenantPath(tenantId), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -127,13 +125,14 @@ export async function runAgent(
 }
 
 export async function approveAgentAction(
+  tenantId: string,
   threadId: string,
   approved: boolean,
 ): Promise<AgentResponse> {
   let response: Response
 
   try {
-    response = await fetch(`${tenantPath()}/${threadId}/approval`, {
+    response = await fetch(`${tenantPath(tenantId)}/${threadId}/approval`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -150,6 +149,9 @@ export async function approveAgentAction(
   return parseAgentResponse(response)
 }
 
-export function rejectAgentAction(threadId: string): Promise<AgentResponse> {
-  return approveAgentAction(threadId, false)
+export function rejectAgentAction(
+  tenantId: string,
+  threadId: string,
+): Promise<AgentResponse> {
+  return approveAgentAction(tenantId, threadId, false)
 }

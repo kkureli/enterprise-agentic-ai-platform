@@ -1,34 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
-
-import { fetchSystemStatus, type SystemStatus } from '../api/demo'
+import { fetchSystemStatus } from '../api/demo'
 import { EmptyBlock, ErrorBlock, LoadingBlock } from '../components/AsyncState'
 import { StatusBadge } from '../components/StatusBadge'
-
-type LoadStatus = 'loading' | 'success' | 'error'
+import { useCachedResource } from '../hooks/useCachedResource'
+import { TTL } from '../lib/requestCache'
 
 export function SystemStatusPage() {
-  const [data, setData] = useState<SystemStatus | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [status, setStatus] = useState<LoadStatus>('loading')
-
-  const load = useCallback(async () => {
-    setStatus('loading')
-    setError(null)
-
-    try {
-      const payload = await fetchSystemStatus()
-      setData(payload)
-      setStatus('success')
-    } catch (err) {
-      setData(null)
-      setStatus('error')
-      setError(err instanceof Error ? err.message : 'Failed to load system status.')
-    }
-  }, [])
-
-  useEffect(() => {
-    void load()
-  }, [load])
+  const { data, error, status, isRefreshing, reload } = useCachedResource({
+    key: 'system-status',
+    ttlMs: TTL.status,
+    fetcher: fetchSystemStatus,
+  })
 
   return (
     <div className="status-page">
@@ -36,6 +17,8 @@ export function SystemStatusPage() {
         <h2 className="page-header__title">System Status</h2>
         <p className="page-header__subtitle">
           Safe readiness view for the public demo. No connection strings or secrets are exposed.
+          First request after idle may take several seconds (serverless cold start).
+          {isRefreshing ? ' · Refreshing…' : null}
         </p>
       </header>
 
@@ -51,7 +34,7 @@ export function SystemStatusPage() {
         <ErrorBlock
           title="Unable to load system status."
           message={error}
-          onRetry={() => void load()}
+          onRetry={() => void reload(true)}
         />
       ) : null}
 

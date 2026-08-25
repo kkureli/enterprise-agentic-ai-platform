@@ -6,6 +6,7 @@ import type { ChatMessage, ExecutionDetails } from '../types/agent'
 
 type ChatMessageProps = {
   message: ChatMessage
+  tenantId: string
   onApprovalResolved: (
     messageId: string,
     approved: boolean,
@@ -14,7 +15,7 @@ type ChatMessageProps = {
   ) => void
 }
 
-export function ChatMessageItem({ message, onApprovalResolved }: ChatMessageProps) {
+export function ChatMessageItem({ message, tenantId, onApprovalResolved }: ChatMessageProps) {
   const isUser = message.role === 'user'
 
   return (
@@ -44,6 +45,7 @@ export function ChatMessageItem({ message, onApprovalResolved }: ChatMessageProp
       message.threadId &&
       !message.approvalResolved ? (
         <ApprovalCard
+          tenantId={tenantId}
           threadId={message.threadId}
           pendingAction={message.pendingAction}
           onResolved={(approved, answer, executionDetails) =>

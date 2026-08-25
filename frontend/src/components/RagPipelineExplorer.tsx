@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 
 import {
   ADVANCED_PATH_IDS,
@@ -68,11 +68,25 @@ function Inspector({ node }: { node: RagPipelineNode }) {
 export function RagPipelineExplorer({ onNavigate }: RagPipelineExplorerProps) {
   const [selectedId, setSelectedId] = useState(RAG_PIPELINE_NODES[0]?.id ?? '')
   const headingId = useId()
+  const inspectorRef = useRef<HTMLDivElement>(null)
+  const userSelectedRef = useRef(false)
   const selected =
     RAG_PIPELINE_NODES.find((node) => node.id === selectedId) ?? RAG_PIPELINE_NODES[0]
 
   const mainFlow = RAG_PIPELINE_NODES.filter((node) => node.usedIn !== 'side')
   const cacheNode = RAG_PIPELINE_NODES.find((node) => node.id === 'rag-cache')
+
+  function selectNode(id: string) {
+    userSelectedRef.current = true
+    setSelectedId(id)
+  }
+
+  useEffect(() => {
+    if (!userSelectedRef.current || !inspectorRef.current) {
+      return
+    }
+    inspectorRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [selectedId])
 
   return (
     <section className="rag-explorer" aria-labelledby={headingId}>
@@ -162,7 +176,7 @@ export function RagPipelineExplorer({ onNavigate }: RagPipelineExplorerProps) {
                       : 'rag-node'
                   }
                   aria-pressed={selected?.id === node.id}
-                  onClick={() => setSelectedId(node.id)}
+                  onClick={() => selectNode(node.id)}
                 >
                   <span className="rag-node__name">{node.name}</span>
                   <span className="rag-node__meta">
@@ -182,7 +196,7 @@ export function RagPipelineExplorer({ onNavigate }: RagPipelineExplorerProps) {
                           : 'rag-node rag-node--side'
                       }
                       aria-pressed={selected?.id === cacheNode.id}
-                      onClick={() => setSelectedId(cacheNode.id)}
+                      onClick={() => selectNode(cacheNode.id)}
                     >
                       <span className="rag-node__name">{cacheNode.name}</span>
                       <span className="rag-node__meta">
@@ -215,7 +229,9 @@ export function RagPipelineExplorer({ onNavigate }: RagPipelineExplorerProps) {
           })}
         </div>
 
-        {selected ? <Inspector node={selected} /> : null}
+        <div className="rag-inspector-col" ref={inspectorRef}>
+          {selected ? <Inspector node={selected} /> : null}
+        </div>
       </div>
 
       <section className="rag-isolation" aria-labelledby="tenant-isolation-heading">

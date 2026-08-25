@@ -64,7 +64,17 @@ export async function inspectDocument(
   tenantId: string,
   documentId: string,
 ): Promise<DocumentInspect> {
-  const response = await fetch(`${getApiBaseUrl()}/tenants/${tenantId}/documents/${documentId}`)
+  let response: Response
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}/tenants/${tenantId}/documents/${documentId}`)
+  } catch {
+    throw new PlaygroundApiError(
+      'Unable to reach the server while loading document chunks.',
+      0,
+    )
+  }
+
   return parseJson<DocumentInspect>(response)
 }
 

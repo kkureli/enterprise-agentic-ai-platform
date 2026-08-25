@@ -1,23 +1,43 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 
 import { AgentApiError, runAgent } from './api/agent'
 import {
+  clearStoredTenantName,
+  clearTenantId,
+  getStoredTenantName,
   getTenantId,
   setStoredTenantName,
   setTenantId,
 } from './api/config'
-import { listDemoTenants } from './api/playground'
+import { fetchEvaluations } from './api/demo'
+import { listDemoTenants, listDocuments } from './api/playground'
 import { EmptyBlock, ErrorBlock, LoadingBlock } from './components/AsyncState'
+import { HeaderSocialLinks } from './components/HeaderSocialLinks'
 import { Sidebar, TenantSelector, type TenantLoadStatus } from './components/PlaygroundNav'
-import { ArchitecturePage } from './pages/ArchitecturePage'
-import { CompareRunsPage } from './pages/CompareRunsPage'
 import { DocumentsPage } from './pages/DocumentsPage'
-import { EvaluationPage } from './pages/EvaluationPage'
 import { OperationsPage } from './pages/OperationsPage'
 import { PlaygroundChat } from './pages/PlaygroundChat'
-import { SystemStatusPage } from './pages/SystemStatusPage'
+import {
+  TTL,
+  cachedFetch,
+  invalidateCache,
+  invalidateTenantScopedCaches,
+} from './lib/requestCache'
 import type { AgentResponse, ChatMessage, ExecutionDetails, RetrievalMode } from './types/agent'
 import type { DemoTenant, PlaygroundPage } from './types/playground'
+
+const ArchitecturePage = lazy(() =>
+  import('./pages/ArchitecturePage').then((module) => ({ default: module.ArchitecturePage })),
+)
+const CompareRunsPage = lazy(() =>
+  import('./pages/CompareRunsPage').then((module) => ({ default: module.CompareRunsPage })),
+)
+const EvaluationPage = lazy(() =>
+  import('./pages/EvaluationPage').then((module) => ({ default: module.EvaluationPage })),
+)
+const SystemStatusPage = lazy(() =>
+  import('./pages/SystemStatusPage').then((module) => ({ default: module.SystemStatusPage })),
+)
 
 const CLIENT_COOLDOWN_MS = 1500
 
@@ -50,6 +70,21 @@ function loadingMessage(): ChatMessage {
   }
 }
 
+function scheduleIdle(task: () => void): () => void {
+  const richWindow = window as Window & {
+    requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
+    cancelIdleCallback?: (handle: number) => void
+  }
+
+  if (typeof richWindow.requestIdleCallback === 'function') {
+    const handle = richWindow.requestIdleCallback(() => task(), { timeout: 2500 })
+    return () => richWindow.cancelIdleCallback?.(handle)
+  }
+
+  const handle = window.setTimeout(task, 400)
+  return () => window.clearTimeout(handle)
+}
+
 export default function App() {
   const [page, setPage] = useState<PlaygroundPage>('playground')
   const [tenants, setTenants] = useState<DemoTenant[]>([])
@@ -69,13 +104,20 @@ export default function App() {
   const aiBusy = isSending || cooldownActive
   const needsTenant = !TENANT_OPTIONAL_PAGES.includes(page)
 
-  const loadTenants = useCallback(async () => {
+  const loadTenants = useCallback(async (force = false) => {
     const generation = ++loadGenerationRef.current
-    setTenantStatus('loading')
+    if (!force) {
+      setTenantStatus((current) => (current === 'success' ? current : 'loading'))
+    } else {
+      setTenantStatus('loading')
+    }
     setTenantsError(null)
 
     try {
-      const demoTenants = await listDemoTenants()
+      const demoTenants = await cachedFetch('demo-tenants', listDemoTenants, {
+        ttlMs: TTL.tenants,
+        force,
+      })
 
       if (generation !== loadGenerationRef.current) {
         return
@@ -86,11 +128,18 @@ export default function App() {
 
       if (demoTenants.length === 0) {
         setSelectedTenantId('')
+        clearTenantId()
+        clearStoredTenantName()
         return
       }
 
-      const existing = demoTenants.find((tenant) => tenant.id === getTenantId())
-      const next = existing ?? demoTenants[0]
+      const storedId = getTenantId()
+      const storedName = getStoredTenantName()
+      const byId = demoTenants.find((tenant) => tenant.id === storedId)
+      const byName = storedName
+        ? demoTenants.find((tenant) => tenant.name === storedName)
+        : undefined
+      const next = byId ?? byName ?? demoTenants[0]
 
       setSelectedTenantId(next.id)
       setTenantId(next.id)
@@ -111,6 +160,21 @@ export default function App() {
   useEffect(() => {
     void loadTenants()
   }, [loadTenants])
+
+  useEffect(() => {
+    if (tenantStatus !== 'success' || !selectedTenantId) {
+      return
+    }
+
+    return scheduleIdle(() => {
+      void cachedFetch('evaluations', fetchEvaluations, { ttlMs: TTL.evaluations })
+      void cachedFetch(
+        `documents:${selectedTenantId}`,
+        () => listDocuments(selectedTenantId),
+        { ttlMs: TTL.documents },
+      )
+    })
+  }, [selectedTenantId, tenantStatus])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -139,14 +203,16 @@ export default function App() {
     setStoredTenantName(tenant.name)
     setMessages([])
     setInput('')
+    setRetrievalMode('standard')
     setPage('playground')
   }
 
   const sendQuestion = useCallback(
     async (question: string) => {
       const trimmed = question.trim()
+      const tenantId = selectedTenantId.trim()
 
-      if (!trimmed || sendingLockRef.current || !selectedTenantId || cooldownActive) {
+      if (!trimmed || sendingLockRef.current || !tenantId || cooldownActive) {
         return
       }
 
@@ -166,7 +232,7 @@ export default function App() {
       setPage('playground')
 
       try {
-        const response = await runAgent(trimmed, retrievalMode)
+        const response = await runAgent(tenantId, trimmed, retrievalMode)
         const assistantMessage = responseToMessage(response, retrievalMode)
 
         setMessages((current) =>
@@ -214,6 +280,11 @@ export default function App() {
     answer: string,
     executionDetails?: ExecutionDetails | null,
   ) {
+    if (approved && selectedTenantId) {
+      invalidateTenantScopedCaches(selectedTenantId)
+      invalidateCache(`operations:${selectedTenantId}`)
+    }
+
     setMessages((current) => {
       const updated = current.map((message) =>
         message.id === messageId
@@ -262,7 +333,7 @@ export default function App() {
         <ErrorBlock
           title="Unable to load demo tenants."
           message={tenantsError}
-          onRetry={() => void loadTenants()}
+          onRetry={() => void loadTenants(true)}
           retrying={false}
         />
       )
@@ -289,6 +360,7 @@ export default function App() {
     if (page === 'playground') {
       return (
         <PlaygroundChat
+          tenantId={selectedTenant.id}
           tenantName={selectedTenant.name}
           messages={messages}
           input={input}
@@ -318,7 +390,15 @@ export default function App() {
     }
 
     if (page === 'compare') {
-      return <CompareRunsPage disabled={aiBusy} />
+      return (
+        <Suspense fallback={<LoadingBlock title="Loading compare tools…" compact />}>
+          <CompareRunsPage
+            key={selectedTenant.id}
+            tenantId={selectedTenant.id}
+            disabled={aiBusy}
+          />
+        </Suspense>
+      )
     }
 
     return null
@@ -328,9 +408,14 @@ export default function App() {
     <div className="app-shell">
       <header className="app-header">
         <div className="app-header__brand">
-          <div className="app-header__logo" aria-hidden="true">
+          <button
+            type="button"
+            className="app-header__logo"
+            aria-label="Go to Playground home"
+            onClick={() => setPage('playground')}
+          >
             EA
-          </div>
+          </button>
           <div>
             <div className="app-header__title-row">
               <h1 className="app-header__title">Enterprise Agentic AI Playground</h1>
@@ -342,14 +427,17 @@ export default function App() {
           </div>
         </div>
 
-        <TenantSelector
-          tenants={tenants}
-          selectedId={selectedTenantId}
-          status={tenantStatus}
-          error={tenantsError}
-          onChange={handleTenantChange}
-          onRetry={() => void loadTenants()}
-        />
+        <div className="app-header__actions">
+          <TenantSelector
+            tenants={tenants}
+            selectedId={selectedTenantId}
+            status={tenantStatus}
+            error={tenantsError}
+            onChange={handleTenantChange}
+            onRetry={() => void loadTenants(true)}
+          />
+          <HeaderSocialLinks />
+        </div>
       </header>
 
       <div className="app-layout">
@@ -358,9 +446,11 @@ export default function App() {
         <main className="app-main">
           <div className="app-main__inner">
             {needsTenant ? renderTenantGatedContent() : null}
-            {page === 'evaluation' ? <EvaluationPage /> : null}
-            {page === 'status' ? <SystemStatusPage /> : null}
-            {page === 'architecture' ? <ArchitecturePage onNavigate={setPage} /> : null}
+            <Suspense fallback={<LoadingBlock title="Loading page…" compact />}>
+              {page === 'evaluation' ? <EvaluationPage /> : null}
+              {page === 'status' ? <SystemStatusPage /> : null}
+              {page === 'architecture' ? <ArchitecturePage onNavigate={setPage} /> : null}
+            </Suspense>
           </div>
         </main>
       </div>

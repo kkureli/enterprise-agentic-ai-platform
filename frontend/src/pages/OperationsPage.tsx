@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import {
   listAssets,
@@ -7,6 +7,8 @@ import {
 } from '../api/playground'
 import { EmptyBlock, ErrorBlock, LoadingBlock } from '../components/AsyncState'
 import { StatusBadge } from '../components/StatusBadge'
+import { useCachedResource } from '../hooks/useCachedResource'
+import { TTL, cacheKeyOperations } from '../lib/requestCache'
 import type {
   Asset,
   MaintenanceRecord,
@@ -19,43 +21,33 @@ type OperationsPageProps = {
 }
 
 type OpsTab = 'assets' | 'history' | 'tickets'
-type LoadStatus = 'loading' | 'success' | 'error'
+
+type OperationsBundle = {
+  assets: Asset[]
+  records: MaintenanceRecord[]
+  tickets: MaintenanceTicket[]
+}
+
+async function fetchOperationsBundle(tenantId: string): Promise<OperationsBundle> {
+  const [assets, records, tickets] = await Promise.all([
+    listAssets(tenantId),
+    listMaintenanceRecords(tenantId),
+    listMaintenanceTickets(tenantId),
+  ])
+  return { assets, records, tickets }
+}
 
 export function OperationsPage({ tenantId, onAskAboutAsset }: OperationsPageProps) {
   const [tab, setTab] = useState<OpsTab>('assets')
-  const [assets, setAssets] = useState<Asset[]>([])
-  const [records, setRecords] = useState<MaintenanceRecord[]>([])
-  const [tickets, setTickets] = useState<MaintenanceTicket[]>([])
-  const [status, setStatus] = useState<LoadStatus>('loading')
-  const [error, setError] = useState<string | null>(null)
+  const { data, error, status, isRefreshing, reload } = useCachedResource({
+    key: cacheKeyOperations(tenantId),
+    ttlMs: TTL.operations,
+    fetcher: () => fetchOperationsBundle(tenantId),
+  })
 
-  const load = useCallback(async () => {
-    setStatus('loading')
-    setError(null)
-
-    try {
-      const [assetRows, recordRows, ticketRows] = await Promise.all([
-        listAssets(tenantId),
-        listMaintenanceRecords(tenantId),
-        listMaintenanceTickets(tenantId),
-      ])
-
-      setAssets(assetRows)
-      setRecords(recordRows)
-      setTickets(ticketRows)
-      setStatus('success')
-    } catch (err) {
-      setAssets([])
-      setRecords([])
-      setTickets([])
-      setStatus('error')
-      setError(err instanceof Error ? err.message : 'Failed to load operations data.')
-    }
-  }, [tenantId])
-
-  useEffect(() => {
-    void load()
-  }, [load])
+  const assets = data?.assets ?? []
+  const records = data?.records ?? []
+  const tickets = data?.tickets ?? []
 
   const emptyForTab =
     (tab === 'assets' && assets.length === 0) ||
@@ -69,6 +61,7 @@ export function OperationsPage({ tenantId, onAskAboutAsset }: OperationsPageProp
         <p className="page-header__subtitle">
           Read-only explorer for tenant-scoped assets, history, and tickets. Writes go through
           AI / HITL.
+          {isRefreshing ? ' · Refreshing…' : null}
         </p>
       </header>
 
@@ -80,7 +73,7 @@ export function OperationsPage({ tenantId, onAskAboutAsset }: OperationsPageProp
         <ErrorBlock
           title="Unable to load operations data."
           message={error}
-          onRetry={() => void load()}
+          onRetry={() => void reload(true)}
         />
       ) : null}
 
@@ -110,7 +103,9 @@ export function OperationsPage({ tenantId, onAskAboutAsset }: OperationsPageProp
           </div>
 
           {emptyForTab ? (
-            <EmptyBlock title={`No ${tab === 'history' ? 'maintenance history' : tab} for this tenant.`} />
+            <EmptyBlock
+              title={`No ${tab === 'history' ? 'maintenance history' : tab} for this tenant.`}
+            />
           ) : null}
 
           {tab === 'assets' && assets.length > 0 ? (

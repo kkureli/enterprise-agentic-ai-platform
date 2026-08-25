@@ -1,37 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
-
-import { fetchEvaluations, type DemoEvaluations } from '../api/demo'
+import { fetchEvaluations } from '../api/demo'
 import { ErrorBlock, LoadingBlock } from '../components/AsyncState'
-
-type LoadStatus = 'loading' | 'success' | 'error'
+import { useCachedResource } from '../hooks/useCachedResource'
+import { TTL } from '../lib/requestCache'
 
 function pct(value: number): string {
   return `${(value * 100).toFixed(1)}%`
 }
 
 export function EvaluationPage() {
-  const [data, setData] = useState<DemoEvaluations | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [status, setStatus] = useState<LoadStatus>('loading')
-
-  const load = useCallback(async () => {
-    setStatus('loading')
-    setError(null)
-
-    try {
-      const payload = await fetchEvaluations()
-      setData(payload)
-      setStatus('success')
-    } catch (err) {
-      setData(null)
-      setStatus('error')
-      setError(err instanceof Error ? err.message : 'Failed to load evaluations.')
-    }
-  }, [])
-
-  useEffect(() => {
-    void load()
-  }, [load])
+  const { data, error, status, isRefreshing, reload } = useCachedResource({
+    key: 'evaluations',
+    ttlMs: TTL.evaluations,
+    fetcher: fetchEvaluations,
+    revalidate: false,
+  })
 
   return (
     <div className="evaluation-page">
@@ -39,6 +21,7 @@ export function EvaluationPage() {
         <h2 className="page-header__title">Evaluation</h2>
         <p className="page-header__subtitle">
           Regression metrics from curated evaluation runs — not a live production SLA claim.
+          {isRefreshing ? ' · Refreshing…' : null}
         </p>
       </header>
 
@@ -50,7 +33,7 @@ export function EvaluationPage() {
         <ErrorBlock
           title="Unable to load evaluation metrics."
           message={error}
-          onRetry={() => void load()}
+          onRetry={() => void reload(true)}
         />
       ) : null}
 

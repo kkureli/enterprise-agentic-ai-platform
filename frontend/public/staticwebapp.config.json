@@ -3,6 +3,14 @@
     "rewrite": "/index.html",
     "exclude": ["/assets/*", "/*.{css,js,ico,png,jpg,jpeg,gif,svg,webp}"]
   },
+  "routes": [
+    {
+      "route": "/assets/*",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable"
+      }
+    }
+  ],
   "globalHeaders": {
     "Cache-Control": "no-cache"
   }

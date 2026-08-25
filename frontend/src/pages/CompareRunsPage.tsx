@@ -13,6 +13,7 @@ import {
 import type { AgentResponse, ExecutionDetails } from '../types/agent'
 
 type CompareRunsPageProps = {
+  tenantId: string
   disabled?: boolean
 }
 
@@ -131,7 +132,7 @@ function strategyLabel(details?: ExecutionDetails | null): string | null {
   return details?.retrieval?.strategy ?? null
 }
 
-export function CompareRunsPage({ disabled }: CompareRunsPageProps) {
+export function CompareRunsPage({ tenantId, disabled }: CompareRunsPageProps) {
   const [question, setQuestion] = useState('What does E-100 mean?')
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -147,7 +148,7 @@ export function CompareRunsPage({ disabled }: CompareRunsPageProps) {
     }
 
     const trimmed = question.trim()
-    if (!trimmed) {
+    if (!trimmed || !tenantId.trim()) {
       return
     }
 
@@ -159,7 +160,7 @@ export function CompareRunsPage({ disabled }: CompareRunsPageProps) {
     setShowTraces(false)
 
     try {
-      const result = await compareAgentRuns(trimmed)
+      const result = await compareAgentRuns(tenantId, trimmed)
       setStandard(result.standard)
       setAdvanced(result.advanced)
       setNote(result.note)
@@ -265,6 +266,20 @@ export function CompareRunsPage({ disabled }: CompareRunsPageProps) {
 
       {standard && advanced ? (
         <>
+          <section className="compare-answers" aria-label="Compared answers">
+            <h3 className="compare-observed__title">Answers</h3>
+            <div className="compare-summary">
+              <article className="compare-summary__card">
+                <h4 className="compare-summary__title">Standard</h4>
+                <p className="compare-summary__answer">{standard.answer || 'No answer returned.'}</p>
+              </article>
+              <article className="compare-summary__card compare-summary__card--accent">
+                <h4 className="compare-summary__title">Advanced</h4>
+                <p className="compare-summary__answer">{advanced.answer || 'No answer returned.'}</p>
+              </article>
+            </div>
+          </section>
+
           {observed.length > 0 ? (
             <section className="compare-observed">
               <h3 className="compare-observed__title">Observed differences</h3>
