@@ -111,9 +111,7 @@ async def get_system_status() -> SystemStatusResponse:
         ),
         SystemComponentStatus(
             name="Redis",
-            status=label(redis, required=False)
-            if settings.redis_enabled
-            else "Degraded",
+            status=label(redis, required=False) if settings.redis_enabled else "Degraded",
             role="RAG cache + rate limiting",
         ),
         SystemComponentStatus(

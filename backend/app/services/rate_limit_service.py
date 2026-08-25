@@ -206,18 +206,13 @@ async def check_daily_ai_budget(*, units: int = 1) -> LimitDecision:
             limit=settings.demo_daily_ai_request_limit,
             window_seconds=ttl_seconds,
             fail_open=fail_open,
-            exceeded_reason=(
-                "Public demo AI usage limit has been reached for today."
-            ),
+            exceeded_reason=("Public demo AI usage limit has been reached for today."),
         )
         if not decision.allowed:
             if decision.status_code == 429:
                 # Next UTC midnight approximate retry hint.
                 now = datetime.now(UTC)
-                seconds = (
-                    24 * 3600
-                    - (now.hour * 3600 + now.minute * 60 + now.second)
-                )
+                seconds = 24 * 3600 - (now.hour * 3600 + now.minute * 60 + now.second)
                 decision.retry_after_seconds = max(60, seconds)
             return decision
     return decision

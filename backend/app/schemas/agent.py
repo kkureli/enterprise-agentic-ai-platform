@@ -16,9 +16,7 @@ class AgentRequest(BaseModel):
     def validate_question_length(cls, value: str) -> str:
         max_chars = settings.max_agent_question_chars
         if len(value) > max_chars:
-            raise ValueError(
-                f"Question exceeds maximum length of {max_chars} characters."
-            )
+            raise ValueError(f"Question exceeds maximum length of {max_chars} characters.")
         return value
 
 
@@ -46,9 +44,7 @@ class AgentCompareRequest(BaseModel):
     def validate_question_length(cls, value: str) -> str:
         max_chars = settings.max_agent_question_chars
         if len(value) > max_chars:
-            raise ValueError(
-                f"Question exceeds maximum length of {max_chars} characters."
-            )
+            raise ValueError(f"Question exceeds maximum length of {max_chars} characters.")
         return value
 
 
