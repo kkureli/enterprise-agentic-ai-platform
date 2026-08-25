@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import App from './App.tsx'
+import { initFirebaseAnalytics } from './lib/firebase'
 import './index.css'
 
 createRoot(document.getElementById('root')!).render(
@@ -11,8 +12,4 @@ createRoot(document.getElementById('root')!).render(
 )
 
 // Production-only, non-blocking Firebase / GA4 website analytics.
-void import('./lib/firebase')
-  .then((module) => module.initFirebaseAnalytics())
-  .catch(() => {
-    // Ignore analytics bootstrap failures.
-  })
+void initFirebaseAnalytics()

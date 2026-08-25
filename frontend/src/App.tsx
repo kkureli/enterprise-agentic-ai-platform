@@ -23,6 +23,7 @@ import {
   invalidateCache,
   invalidateTenantScopedCaches,
 } from './lib/requestCache'
+import { logScreenView } from './lib/firebase'
 import type { AgentResponse, ChatMessage, ExecutionDetails, RetrievalMode } from './types/agent'
 import type { DemoTenant, PlaygroundPage } from './types/playground'
 
@@ -160,6 +161,10 @@ export default function App() {
   useEffect(() => {
     void loadTenants()
   }, [loadTenants])
+
+  useEffect(() => {
+    logScreenView(page)
+  }, [page])
 
   useEffect(() => {
     if (tenantStatus !== 'success' || !selectedTenantId) {

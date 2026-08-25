@@ -177,12 +177,15 @@ npm run build
 ### Firebase Analytics (optional)
 
 Purpose: basic anonymous portfolio traffic measurement (visits, daily/monthly
-traffic, approximate geo, standard GA4 active-user metrics).
+traffic, approximate geo, standard GA4 active-user metrics, and which UI
+sections were opened).
 
 The playground intentionally does **not** track AI prompts, responses, SQL,
 documents, execution traces, tenant IDs, or other application content. Only
-standard Firebase / GA4 website telemetry is enabled, and only in production
-builds (`import.meta.env.PROD`) when all `VITE_FIREBASE_*` values are present.
+standard Firebase / GA4 website telemetry plus allowlisted UI section names
+(`playground`, `documents`, `operations`, `compare`, `evaluation`, `status`,
+`architecture`) are recorded. Analytics runs only in production builds
+(`import.meta.env.PROD`) when all `VITE_FIREBASE_*` values are present.
 
 Set these GitHub Actions repository/environment **variables** (same style as
 `VITE_API_BASE_URL`) so the SWA workflow can embed them at build time:
