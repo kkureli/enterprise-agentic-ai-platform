@@ -18,6 +18,7 @@ async def approved_action_node(state: AgentState) -> dict:
         "external_id": result.get("external_id"),
         "deduplicated": result.get("deduplicated"),
         "provider": result.get("provider"),
+        "risk_escalation_id": result.get("risk_escalation_id"),
     }
 
     tool_name = (state.get("pending_action") or {}).get("tool_name")
@@ -28,8 +29,14 @@ async def approved_action_node(state: AgentState) -> dict:
                 f"({result['external_url']}); skipped duplicate create."
             )
         else:
+            escalation_note = ""
+            if result.get("risk_escalation_id"):
+                escalation_note = (
+                    f" Internal escalation {result['risk_escalation_id']} recorded."
+                )
             tool_answer = (
-                f"GitHub issue created successfully: {result['external_url']}"
+                f"GitHub issue created successfully: {result['external_url']}."
+                f"{escalation_note}"
             )
     else:
         tool_answer = (

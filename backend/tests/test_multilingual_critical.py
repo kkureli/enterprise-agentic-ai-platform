@@ -63,6 +63,8 @@ def test_golden_dataset_includes_critical_turkish_cases() -> None:
         "tool_tr_write_01": ("tool", True),
         "unsupported_tr_01": ("unsupported", False),
         "composite_rag_mcp_tr_01": ("knowledge", False),
+        "a2a_external_risk_tr_01": ("external_risk_assessment", False),
+        "sql_company_tr_01": ("sql", False),
     }
 
     for case_id, (expected_route, expected_approval) in required.items():
@@ -74,3 +76,8 @@ def test_golden_dataset_includes_critical_turkish_cases() -> None:
 
     composite = by_id["composite_rag_mcp_tr_01"]
     assert composite["expected_routes"] == ["knowledge", "tool"]
+    assert by_id["composite_a2a_company_tr_01"]["expected_routes"] == [
+        "sql",
+        "knowledge",
+        "external_risk_assessment",
+    ]

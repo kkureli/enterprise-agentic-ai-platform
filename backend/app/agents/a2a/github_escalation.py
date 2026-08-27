@@ -76,6 +76,7 @@ def build_github_escalation_pending_action(
             "tenant_slug": tenant_slug,
             "dedupe_key": dedupe_key,
             "company_query": company_query,
+            "risk_level": level,
             "labels": ["agentic-risk", label],
         },
     }

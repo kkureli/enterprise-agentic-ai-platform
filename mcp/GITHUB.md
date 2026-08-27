@@ -18,9 +18,10 @@ GITHUB_API_BASE=https://api.github.com
 The host must **not** call this tool until after human approval.
 `execute_approved_action(..., tool_name=create_github_issue)`:
 
-1. Checks `external_action_links` for `dedupe_key` (skip duplicate)
-2. Calls MCP `create_github_issue`
-3. Stores audit/link metadata only (not full issue body)
+1. Creates internal `risk_escalations` row
+2. Checks `external_action_links` for `dedupe_key` (skip duplicate GitHub create)
+3. Calls MCP `create_github_issue`
+4. Stores audit/link metadata (+ `risk_escalation_id`)
 
 ## SQL audit columns
 

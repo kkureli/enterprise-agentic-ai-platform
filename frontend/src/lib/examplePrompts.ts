@@ -134,6 +134,11 @@ const PROMPTS_BY_TENANT: Record<string, ExamplePrompt[]> = {
     },
     {
       category: 'Composite / Synthesis',
+      label: 'Microsoft risk HITL (TR)',
+      prompt: "Microsoft'un dış ve iç risklerini değerlendir.",
+    },
+    {
+      category: 'Composite / Synthesis',
       label: 'Spotify dış risk (TR A2A)',
       prompt: "Spotify'ın dış risklerini araştır.",
     },

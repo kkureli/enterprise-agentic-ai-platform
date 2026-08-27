@@ -54,6 +54,6 @@ When `knowledge` is already planned (composite), RAG is left to the parallel
 ## Medium / high risk → HITL → GitHub
 
 If `risk_level` is `medium` or `high`, `a2a_risk_node` sets `pending_action`
-for `create_github_issue` and interrupts for human approval. Approve runs MCP
-(real GitHub Issue) + SQL audit/link; reject performs no external write.
+for `create_github_issue` and interrupts for human approval. Approve runs MCP (real GitHub Issue) + internal `risk_escalations` row +
+SQL audit/link; reject performs no external write.
 `low` remains informational only.

@@ -9,6 +9,7 @@ from app.services.maintenance_ticket_service import (
     create_maintenance_ticket,
 )
 from app.services.mcp_client import call_maintenance_tool
+from app.services.risk_escalation_service import create_risk_escalation
 
 APPROVED_WRITE_ACTIONS = {
     "create_maintenance_ticket",
@@ -49,6 +50,7 @@ async def _execute_create_github_issue(
     dedupe_key = str(arguments.get("dedupe_key") or "").strip()
     company_query = arguments.get("company_query")
     labels = arguments.get("labels")
+    risk_level = str(arguments.get("risk_level") or "medium").strip() or "medium"
     internal_ticket_id = arguments.get("internal_ticket_id")
 
     if not title or not body:
@@ -74,8 +76,19 @@ async def _execute_create_github_issue(
             "internal_ticket_id": (
                 str(existing.internal_ticket_id) if existing.internal_ticket_id else None
             ),
+            "risk_escalation_id": (
+                str(existing.risk_escalation_id) if existing.risk_escalation_id else None
+            ),
             "company_query": existing.company_query,
         }
+
+    # Internal ticket first (commercial risk escalation), then GitHub, then audit link.
+    escalation = await create_risk_escalation(
+        tenant_id=tenant_id,
+        company_query=str(company_query or "unknown"),
+        risk_level=risk_level,
+        summary=body[:4000],
+    )
 
     mcp_args: dict[str, Any] = {
         "title": title,
@@ -106,6 +119,7 @@ async def _execute_create_github_issue(
         status=str(payload.get("state") or "open"),
         dedupe_key=dedupe_key,
         internal_ticket_id=ticket_uuid,
+        risk_escalation_id=escalation.id,
         company_query=str(company_query) if company_query else None,
     )
 
@@ -120,7 +134,9 @@ async def _execute_create_github_issue(
         "issue_number": payload.get("number"),
         "repository": payload.get("repository"),
         "internal_ticket_id": str(ticket_uuid) if ticket_uuid else None,
+        "risk_escalation_id": str(escalation.id),
         "company_query": link.company_query,
+        "risk_level": risk_level,
     }
 
 

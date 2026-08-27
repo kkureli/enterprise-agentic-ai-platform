@@ -238,7 +238,8 @@ one graph invocation:
 - Outputs are joined by a grounded **synthesis** node
 - Write actions remain behind HITL approval (allowlisted tools only)
 - Medium/high A2A risk proposes `create_github_issue` (real GitHub) only after
-  human approval; SQL stores audit/link metadata, not full issue bodies
+  human approval; host first records an internal `risk_escalations` ticket,
+  then opens GitHub, then stores audit/link metadata in SQL (not full issue bodies)
 - Tenant context (`tenant_id` / `tenant_slug`) is preserved across participating
   capabilities
 

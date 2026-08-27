@@ -37,12 +37,14 @@ async def create_external_action_link(
     status: str,
     dedupe_key: str,
     internal_ticket_id: UUID | None = None,
+    risk_escalation_id: UUID | None = None,
     company_query: str | None = None,
 ) -> ExternalActionLink:
     async with SessionLocal() as session:
         row = ExternalActionLink(
             tenant_id=tenant_id,
             internal_ticket_id=internal_ticket_id,
+            risk_escalation_id=risk_escalation_id,
             provider=provider,
             external_id=str(external_id),
             external_url=external_url,

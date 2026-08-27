@@ -274,6 +274,79 @@ async def test_a2a_medium_risk_reject_never_calls_github_mcp(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_a2a_medium_risk_approve_calls_github_executor(monkeypatch):
+    async def fake_planner(state):
+        return {
+            "route": "external_risk_assessment",
+            "planned_routes": ["external_risk_assessment"],
+            "requires_synthesis": False,
+            "may_require_write": False,
+            "tool_read_only": False,
+            "execution_details": {
+                "graph_path": ["planner"],
+                "route": "external_risk_assessment",
+            },
+        }
+
+    async def fake_a2a(state):
+        return {
+            "a2a_answer": "Risk level: medium\nConfidence: 0.75",
+            "requires_approval": True,
+            "pending_action": {
+                "tool_name": "create_github_issue",
+                "arguments": {
+                    "title": "[Risk:MEDIUM] Microsoft",
+                    "body": "Escalate",
+                    "tenant_slug": "northstar-commercial",
+                    "dedupe_key": "northstar-commercial:microsoft:external_risk:medium",
+                    "company_query": "Microsoft",
+                    "risk_level": "medium",
+                },
+            },
+            "tool_answer": "MEDIUM risk detected.",
+            "execution_details": {"graph_path": ["a2a_risk"]},
+        }
+
+    async def fake_execute(tenant_id, pending_action):
+        assert pending_action["tool_name"] == "create_github_issue"
+        return {
+            "tool_name": "create_github_issue",
+            "deduplicated": False,
+            "external_url": "https://github.com/kkureli/enterprise-agentic-ai-platform/issues/99",
+            "external_id": "99",
+            "risk_escalation_id": str(uuid4()),
+            "provider": "github",
+            "status": "open",
+        }
+
+    from app.agents import graph as graph_module
+
+    monkeypatch.setattr(graph_module, "planner_node", fake_planner)
+    monkeypatch.setattr(graph_module, "a2a_risk_node", fake_a2a)
+    monkeypatch.setattr(
+        "app.agents.approved_action_node.execute_approved_action",
+        fake_execute,
+    )
+
+    compiled = graph_module.build_agent_graph().compile(checkpointer=InMemorySaver())
+    config = {"configurable": {"thread_id": str(uuid4())}}
+    await compiled.ainvoke(
+        {
+            "tenant_id": uuid4(),
+            "tenant_slug": "northstar-commercial",
+            "query": "Assess Microsoft external risks.",
+            "retrieval_mode": "standard",
+            "response_language": "en",
+        },
+        config=config,
+    )
+    result = await compiled.ainvoke(Command(resume={"approved": True}), config=config)
+    assert result.get("approval_granted") is True
+    assert "issues/99" in result["final_answer"]
+    assert "Risk level: medium" in result["final_answer"]
+
+
+@pytest.mark.asyncio
 async def test_a2a_risk_node_skips_hitl_on_low(monkeypatch) -> None:
     async def fake_rag(**kwargs):
         return SimpleNamespace(answer=None)

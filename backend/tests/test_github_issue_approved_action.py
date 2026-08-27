@@ -16,10 +16,15 @@ from app.services.approved_action_service import (
 @pytest.mark.asyncio
 async def test_execute_create_github_issue_calls_mcp_and_audits(monkeypatch) -> None:
     tenant_id = uuid4()
-    created = {"link": False}
+    created = {"link": False, "escalation": False}
+    escalation_id = uuid4()
 
     async def fake_find(*, tenant_id, dedupe_key):
         return None
+
+    async def fake_escalation(**kwargs):
+        created["escalation"] = True
+        return SimpleNamespace(id=escalation_id)
 
     async def fake_mcp(name, arguments, *, tenant_slug=None):
         assert name == "create_github_issue"
@@ -44,6 +49,7 @@ async def test_execute_create_github_issue_calls_mcp_and_audits(monkeypatch) -> 
         assert kwargs["provider"] == "github"
         assert kwargs["external_id"] == "999001"
         assert kwargs["dedupe_key"] == "northstar:microsoft:high"
+        assert kwargs["risk_escalation_id"] == escalation_id
         return SimpleNamespace(
             provider="github",
             external_id="999001",
@@ -52,11 +58,16 @@ async def test_execute_create_github_issue_calls_mcp_and_audits(monkeypatch) -> 
             dedupe_key=kwargs["dedupe_key"],
             company_query=kwargs.get("company_query"),
             internal_ticket_id=None,
+            risk_escalation_id=escalation_id,
         )
 
     monkeypatch.setattr(
         "app.services.approved_action_service.find_external_action_link",
         fake_find,
+    )
+    monkeypatch.setattr(
+        "app.services.approved_action_service.create_risk_escalation",
+        fake_escalation,
     )
     monkeypatch.setattr(
         "app.services.approved_action_service.call_maintenance_tool",
@@ -77,6 +88,7 @@ async def test_execute_create_github_issue_calls_mcp_and_audits(monkeypatch) -> 
                 "tenant_slug": "northstar-commercial",
                 "dedupe_key": "northstar:microsoft:high",
                 "company_query": "Microsoft",
+                "risk_level": "high",
                 "labels": ["risk", "agentic"],
             },
         },
@@ -84,7 +96,9 @@ async def test_execute_create_github_issue_calls_mcp_and_audits(monkeypatch) -> 
     assert result["deduplicated"] is False
     assert result["external_url"].endswith("/issues/42")
     assert result["issue_number"] == 42
+    assert result["risk_escalation_id"] == str(escalation_id)
     assert created["link"] is True
+    assert created["escalation"] is True
 
 
 @pytest.mark.asyncio
@@ -97,6 +111,7 @@ async def test_execute_create_github_issue_dedupes(monkeypatch) -> None:
         dedupe_key="northstar:spotify:high",
         company_query="Spotify",
         internal_ticket_id=None,
+        risk_escalation_id=None,
     )
 
     async def fake_find(*, tenant_id, dedupe_key):
