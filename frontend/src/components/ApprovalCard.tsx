@@ -22,8 +22,21 @@ function formatActionTitle(toolName: string): string {
   if (toolName === 'create_maintenance_ticket') {
     return 'Create maintenance ticket?'
   }
+  if (toolName === 'create_github_issue') {
+    return 'Open GitHub Issue?'
+  }
 
   return `Approve action: ${toolName.replaceAll('_', ' ')}`
+}
+
+function asText(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim()
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  return null
 }
 
 export function ApprovalCard({
@@ -36,6 +49,15 @@ export function ApprovalCard({
   const [localError, setLocalError] = useState<string | null>(null)
 
   const args = pendingAction.arguments
+  const isGithub = pendingAction.tool_name === 'create_github_issue'
+  const title = asText(args.title)
+  const company = asText(args.company_query)
+  const assetCode = asText(args.asset_code)
+  const issue = asText(args.issue)
+  const priority = asText(args.priority)
+  const labels = Array.isArray(args.labels)
+    ? args.labels.map((item) => String(item)).filter(Boolean)
+    : []
 
   async function handleDecision(approved: boolean) {
     setPending(true)
@@ -64,29 +86,48 @@ export function ApprovalCard({
       </div>
 
       <dl className="approval-card__details">
-        {args.asset_code ? (
+        {isGithub && title ? (
+          <>
+            <dt>Title</dt>
+            <dd>{title}</dd>
+          </>
+        ) : null}
+        {isGithub && company ? (
+          <>
+            <dt>Company</dt>
+            <dd>{company}</dd>
+          </>
+        ) : null}
+        {isGithub && labels.length > 0 ? (
+          <>
+            <dt>Labels</dt>
+            <dd>{labels.join(', ')}</dd>
+          </>
+        ) : null}
+        {assetCode ? (
           <>
             <dt>Asset</dt>
-            <dd>{args.asset_code}</dd>
+            <dd>{assetCode}</dd>
           </>
         ) : null}
-        {args.issue ? (
+        {issue ? (
           <>
             <dt>Issue</dt>
-            <dd>{args.issue}</dd>
+            <dd>{issue}</dd>
           </>
         ) : null}
-        {args.priority ? (
+        {priority ? (
           <>
             <dt>Priority</dt>
-            <dd>{formatPriority(args.priority)}</dd>
+            <dd>{formatPriority(priority)}</dd>
           </>
         ) : null}
       </dl>
 
       <p className="approval-card__hint">
-        Review the details above. Approving will execute this action through the backend approval
-        workflow.
+        {isGithub
+          ? 'Approving creates a real GitHub Issue in the project repository via MCP. Rejecting performs no external write.'
+          : 'Review the details above. Approving will execute this action through the backend approval workflow.'}
       </p>
 
       {localError ? <p className="approval-card__error">{localError}</p> : null}

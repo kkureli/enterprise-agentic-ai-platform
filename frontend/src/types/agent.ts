@@ -11,7 +11,7 @@ export type RetrievalMode = 'standard' | 'advanced'
 
 export type PendingAction = {
   tool_name: string
-  arguments: Record<string, string>
+  arguments: Record<string, unknown>
 }
 
 export type RetrievalChunkDetail = {

@@ -6,6 +6,8 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Command
 
 from app.agents.a2a.github_escalation import (
     build_github_escalation_pending_action,
@@ -188,6 +190,87 @@ async def test_a2a_risk_node_requests_hitl_on_medium(monkeypatch) -> None:
     assert result["requires_approval"] is True
     assert result["pending_action"]["tool_name"] == "create_github_issue"
     assert "MEDIUM" in result["tool_answer"]
+
+
+@pytest.mark.asyncio
+async def test_a2a_medium_risk_reject_never_calls_github_mcp(monkeypatch):
+    """Reject path must finalize without executing create_github_issue."""
+
+    async def fake_planner(state):
+        return {
+            "route": "external_risk_assessment",
+            "planned_routes": ["external_risk_assessment"],
+            "requires_synthesis": False,
+            "may_require_write": False,
+            "tool_read_only": False,
+            "execution_details": {
+                "graph_path": ["planner"],
+                "selected_capabilities": ["external_risk_assessment"],
+                "route": "external_risk_assessment",
+            },
+        }
+
+    async def fake_a2a(state):
+        return {
+            "a2a_answer": "Risk level: medium\nConfidence: 0.75",
+            "a2a_risk_result": {"risk_level": "medium", "confidence": 0.75},
+            "requires_approval": True,
+            "pending_action": {
+                "tool_name": "create_github_issue",
+                "arguments": {
+                    "title": "[Risk:MEDIUM] Microsoft",
+                    "body": "Escalate",
+                    "tenant_slug": "northstar-commercial",
+                    "dedupe_key": "northstar-commercial:microsoft:external_risk:medium",
+                    "company_query": "Microsoft",
+                },
+            },
+            "tool_answer": "MEDIUM risk detected. Approval is required to open a GitHub Issue.",
+            "execution_details": {"graph_path": ["a2a_risk"]},
+        }
+
+    mcp_calls = {"n": 0}
+
+    async def fake_execute(tenant_id, pending_action):
+        mcp_calls["n"] += 1
+        raise AssertionError("approved_action must not run after reject")
+
+    from app.agents import graph as graph_module
+
+    monkeypatch.setattr(graph_module, "planner_node", fake_planner)
+    monkeypatch.setattr(graph_module, "a2a_risk_node", fake_a2a)
+    monkeypatch.setattr(
+        "app.agents.approved_action_node.execute_approved_action",
+        fake_execute,
+    )
+
+    compiled = graph_module.build_agent_graph().compile(checkpointer=InMemorySaver())
+    thread_id = str(uuid4())
+    config = {"configurable": {"thread_id": thread_id}}
+
+    first = await compiled.ainvoke(
+        {
+            "tenant_id": uuid4(),
+            "tenant_slug": "northstar-commercial",
+            "query": "Assess Microsoft external risks.",
+            "retrieval_mode": "standard",
+            "response_language": "en",
+        },
+        config=config,
+    )
+    assert "__interrupt__" in first or first.get("requires_approval")
+
+    # Resume with explicit reject.
+    result = await compiled.ainvoke(
+        Command(resume={"approved": False}),
+        config=config,
+    )
+    assert mcp_calls["n"] == 0
+    assert result.get("approval_granted") is False
+    assert "rejected" in result["final_answer"].lower() or "reddedildi" in result[
+        "final_answer"
+    ].lower()
+    assert "Risk level: medium" in result["final_answer"]
 
 
 @pytest.mark.asyncio

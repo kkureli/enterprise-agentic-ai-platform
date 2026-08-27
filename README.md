@@ -103,8 +103,8 @@ Local development still uses Docker Compose for PostgreSQL, Redis, and Qdrant.
 | RAG | Dense + sparse hybrid retrieval, weighted RRF, cross-encoder reranking, Standard / Advanced modes |
 | Agents | Selective planner → one or more capabilities (RAG / SQL / MCP); composite fan-out + grounded synthesis |
 | SQL | LLM SQL + SQLGlot validation, SELECT-only, allowed tables, tenant bind param, read-only execution |
-| MCP | `get_asset_status`, `get_maintenance_history`, `create_maintenance_ticket` |
-| HITL | Write tools pause for human approval; approved actions persist tickets |
+| MCP | `get_asset_status`, `get_maintenance_history`, `create_maintenance_ticket`, `create_github_issue` |
+| HITL | Write tools pause for human approval; approved actions persist tickets or open GitHub Issues |
 | Tenancy | PostgreSQL `tenant_id` + Qdrant payload filters |
 | Cache / cost | Redis RAG cache, layered rate limits, public-demo budget guards |
 | Checkpoints | PostgreSQL LangGraph checkpoints in production (`CHECKPOINT_BACKEND=postgres`) |
@@ -210,11 +210,17 @@ START → Planner (RoutePlan)
           │     │            └── write → approval interrupt
           │     │                           ├── approve → approved action → Finalize → END
           │     │                           └── reject → Finalize → END
+          │     ├── external_risk_assessment → A2A risk pipeline
+          │     │            ├── low → Finalize → END
+          │     │            └── medium/high → HITL
+          │     │                           ├── approve → MCP create_github_issue
+          │     │                           │            + SQL audit/link → Finalize → END
+          │     │                           └── reject → Finalize → END (no external write)
           │     └── unsupported → fallback → END
           └── multiple capabilities (composite)
-                → parallel read fan-out (RAG / SQL / MCP read-only)
+                → parallel read fan-out (RAG / SQL / MCP read-only [/ A2A])
                 → Synthesis
-                → optional Write Gate → HITL → …
+                → optional Write Gate / A2A HITL → …
                 → Finalize → END
 ```
 
@@ -225,11 +231,14 @@ Local default remains `CHECKPOINT_BACKEND=memory`.
 
 A structured **planner** selects one or more required capabilities for each
 request. Simple questions keep the existing single-capability fast path.
-Composite questions can invoke RAG + SQL + MCP within one graph invocation:
+Composite questions can invoke RAG + SQL + MCP (and commercial A2A risk) within
+one graph invocation:
 
 - Independent read capabilities fan out in parallel
 - Outputs are joined by a grounded **synthesis** node
 - Write actions remain behind HITL approval (allowlisted tools only)
+- Medium/high A2A risk proposes `create_github_issue` (real GitHub) only after
+  human approval; SQL stores audit/link metadata, not full issue bodies
 - Tenant context (`tenant_id` / `tenant_slug`) is preserved across participating
   capabilities
 
@@ -273,9 +282,11 @@ defense-in-depth improvements, not current product features.
 | `get_asset_status` | Read | Demo/simulated operational status via MCP |
 | `get_maintenance_history` | Read | Demo/simulated history via MCP |
 | `create_maintenance_ticket` | Write | Host-intercepted; HITL required; host persists to PostgreSQL |
+| `create_github_issue` | Write | Real GitHub Issue via REST; HITL required; host audits link in SQL |
 
-The MCP stdio server ships in the backend container (`/app/mcp`). Tool data is
-demo/synthetic — not a live CMMS/ERP integration.
+The MCP stdio server ships in the backend container (`/app/mcp`). Maintenance
+tool data is demo/synthetic — not a live CMMS/ERP integration. GitHub writes
+require `GITHUB_TOKEN` / `GITHUB_REPO` (see `.env.example`).
 
 ---
 
@@ -308,6 +319,7 @@ Assistant answers can expose a curated operational trace, including:
 - Retrieval mode, strategy, query rewrites
 - Candidate / context chunks and scores when present
 - SQL metadata, MCP/tool metadata, HITL state
+- A2A risk metadata (company, risk level, follow-up / RAG context flags) when present
 - Cache hit/miss, latency, token usage, estimated cost
 
 This is **operational execution metadata**. It does **not** expose hidden
