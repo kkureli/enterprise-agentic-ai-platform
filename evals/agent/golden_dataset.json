@@ -254,5 +254,39 @@
     "expected_routes": ["knowledge", "tool"],
     "expected_approval": false,
     "required_facts": ["E-100", "MACHINE-42"]
+  },
+
+  {
+    "id": "sql_company_01",
+    "question": "What is Spotify's annual revenue?",
+    "expected_route": "sql",
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Spotify"]
+  },
+  {
+    "id": "sql_company_tr_01",
+    "question": "Spotify'ın cirosu nedir?",
+    "expected_route": "sql",
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Spotify"]
+  },
+  {
+    "id": "knowledge_company_01",
+    "question": "What does the Spotify MSA say about termination?",
+    "expected_route": "knowledge",
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Spotify", "termination"]
+  },
+  {
+    "id": "composite_company_01",
+    "question": "What is Spotify's annual revenue, and what does the Spotify MSA say about termination?",
+    "expected_route": "knowledge",
+    "expected_routes": ["knowledge", "sql"],
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Spotify"]
   }
 ]

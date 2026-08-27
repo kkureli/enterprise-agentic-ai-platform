@@ -1,0 +1,16 @@
+Shopify Customer Notes — Synthetic Demo
+Internal customer ID: CUST-SHOPIFY
+Official name: Shopify Inc.
+Domain: shopify.com
+
+Account notes:
+Shopify is a healthy growth account with strong product adoption on commerce analytics.
+Primary contacts request quarterly roadmap briefings and prefer asynchronous status updates.
+
+Support themes:
+- Faster sandbox refresh for integration testing
+- Clearer documentation for webhook retry behavior
+
+Contract reminder:
+The current enterprise subscription auto-renews annually unless notice is provided 60 days
+before the renewal date.

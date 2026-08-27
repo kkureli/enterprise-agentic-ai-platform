@@ -286,6 +286,7 @@ Public demo tenants:
 1. **Atlas Manufacturing**
 2. **Borealis Cold Chain**
 3. **Helios Energy Services**
+4. **Northstar Commercial** (synthetic CRM for Spotify, Siemens, Shopify, Adobe, Microsoft)
 
 Deliberate **E-100** isolation demo (same code, different grounded meaning):
 

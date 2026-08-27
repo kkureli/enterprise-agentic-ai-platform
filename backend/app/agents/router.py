@@ -74,8 +74,11 @@ Turkish and English questions with the same meaning must select the same capabil
 Capability names and underlying systems remain English (knowledge/sql/tool).
 
 Valid capability routes:
-- knowledge: enterprise documents, policies, manuals, procedures, error-code meaning
-- sql: historical / structured operational data in PostgreSQL (counts, lists, history, tickets)
+- knowledge: enterprise documents, policies, manuals, procedures, error-code meaning,
+  contracts, customer notes, account reviews
+- sql: historical / structured operational data in PostgreSQL (counts, lists, history,
+  tickets) AND commercial account data (companies, revenue, transactions, payments,
+  account health)
 - tool: live operational MCP tools (current asset status) and/or creating a maintenance ticket
 - unsupported: no available capability applies
 
@@ -107,6 +110,15 @@ Examples:
 
 "Hangi varlıklarda uyarı var?"
 → routes=["sql"], requires_synthesis=false, may_require_write=false
+
+"What is Spotify's annual revenue?"
+→ routes=["sql"], requires_synthesis=false, may_require_write=false
+
+"Spotify'ın cirosu nedir?"
+→ routes=["sql"], requires_synthesis=false, may_require_write=false
+
+"What does the Spotify MSA say about termination?"
+→ routes=["knowledge"], requires_synthesis=false, may_require_write=false
 
 "What is MACHINE-42's current status?"
 → routes=["tool"], requires_synthesis=false, may_require_write=false

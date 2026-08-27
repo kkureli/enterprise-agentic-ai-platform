@@ -1,0 +1,11 @@
+Northstar Commercial — Payment Terms Policy (Synthetic)
+Applies to all portfolio companies under this tenant.
+
+Standard terms:
+- Net 30 for software and services invoices unless a customer MSA overrides
+- Net 45 allowed only for strategic industrial accounts with approved credit review
+
+Entity resolution policy:
+Always match customers using internal_customer_id, official_name, company_name, and domain.
+Do not confuse similarly named brands. Example: Spotify must resolve only to CUST-SPOTIFY /
+spotify.com, never to another entertainment or audio company.

@@ -1,0 +1,18 @@
+Spotify Master Services Agreement — Synthetic Demo Summary
+Internal customer ID: CUST-SPOTIFY
+Official name: Spotify AB
+Domain: spotify.com
+
+This document is synthetic demo content for the Northstar Commercial tenant.
+
+Termination (Section 12):
+Either party may terminate for convenience with ninety (90) days prior written notice.
+Either party may terminate for material breach if the breach remains uncured for thirty (30) days
+after written notice.
+
+Payment terms:
+Invoices are due Net 30. Late payments may accrue interest at 1.5% per month.
+
+Data processing:
+Customer content remains Customer-owned. Provider processes data only as needed to deliver
+contracted services and must not use Customer data for unrelated marketing.

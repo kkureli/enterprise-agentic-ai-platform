@@ -37,6 +37,16 @@ DEMO_TENANTS: tuple[DemoTenantSpec, ...] = (
         ),
         short_label="Renewable energy",
     ),
+    DemoTenantSpec(
+        name="Northstar Commercial",
+        slug="northstar-commercial",
+        description=(
+            "Commercial account portfolio with synthetic CRM, revenue, "
+            "payments, and contract notes for real public companies "
+            "(Spotify, Siemens, Shopify, Adobe, Microsoft)."
+        ),
+        short_label="Commercial accounts",
+    ),
 )
 
 DEMO_TENANT_NAMES: frozenset[str] = frozenset(spec.name for spec in DEMO_TENANTS)

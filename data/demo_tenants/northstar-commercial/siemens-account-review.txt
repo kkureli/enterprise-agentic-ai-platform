@@ -1,0 +1,19 @@
+Siemens Account Review — Q2 Synthetic Notes
+Internal customer ID: CUST-SIEMENS
+Official name: Siemens AG
+Domain: siemens.com
+
+Account health: watch
+Health score: 68
+
+Summary:
+Siemens remains a strategic industrial account. Delivery SLAs were met in Q2, but two
+invoice disputes delayed cash collection by 18 days on average.
+
+Open risks:
+- Pending change-order approval on the Berlin site expansion package
+- Watchlist for payment latency versus contractual Net 45
+
+Recommended actions:
+1. Schedule executive QBR focused on invoice dispute root cause
+2. Confirm PO coverage for the next maintenance window before kickoff

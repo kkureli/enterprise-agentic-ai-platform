@@ -156,11 +156,13 @@ def test_demo_tenant_catalog_includes_e100_isolation_names():
         "Atlas Manufacturing",
         "Borealis Cold Chain",
         "Helios Energy Services",
+        "Northstar Commercial",
     }
     assert [spec.slug for spec in DEMO_TENANTS] == [
         "atlas-manufacturing",
         "borealis-cold-chain",
         "helios-energy-services",
+        "northstar-commercial",
     ]
 
 

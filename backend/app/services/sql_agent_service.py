@@ -38,7 +38,7 @@ class SQLAgentResult(BaseModel):
 
 
 SYSTEM_PROMPT = """
-You answer questions about enterprise operational data.
+You answer questions about enterprise operational and commercial account data.
 
 You are given:
 - the user's original question
@@ -54,6 +54,8 @@ Rules:
 - Write the entire answer in the requested response language.
   SQL identifiers and raw row values may stay as returned; translate the
   user-facing explanation as needed without changing facts.
+- For company questions, keep entity identity exact (company_name, domain,
+  internal_customer_id). Never blend facts across different companies.
 """.strip()
 
 

@@ -1,0 +1,15 @@
+Adobe Enterprise Contract Notes — Synthetic Demo
+Internal customer ID: CUST-ADOBE
+Official name: Adobe Inc.
+Domain: adobe.com
+
+Scope:
+Creative and document workflow seats under a multi-year enterprise agreement.
+
+Termination for convenience:
+Adobe may terminate unused seat blocks with 60 days notice; Customer may reduce
+committed seats only at the annual true-up window.
+
+Security addendum:
+Provider must maintain SOC 2 Type II attestation and notify Customer of material security
+incidents within 72 hours of confirmed detection.
