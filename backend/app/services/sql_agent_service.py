@@ -7,6 +7,10 @@ from uuid import UUID
 from pydantic import BaseModel
 from sqlglot import exp, parse
 
+from app.services.language_detection import (
+    detect_response_language,
+    format_response_language_instruction,
+)
 from app.services.llm_service import get_chat_model
 from app.services.sql_generation_service import generate_sql, repair_sql
 from app.services.sql_query_service import (
@@ -47,6 +51,9 @@ Rules:
 - If no rows were returned, clearly say that no matching data was found.
 - Be concise and clear.
 - Do not expose the SQL query unless the user explicitly asks for it.
+- Write the entire answer in the requested response language.
+  SQL identifiers and raw row values may stay as returned; translate the
+  user-facing explanation as needed without changing facts.
 """.strip()
 
 
@@ -90,7 +97,9 @@ async def _generate_and_validate_sql(question: str) -> tuple[str, bool, float]:
 async def answer_with_sql(
     tenant_id: UUID,
     question: str,
+    response_language: str | None = None,
 ) -> SQLAgentResult:
+    language = response_language or detect_response_language(question)
     sql, repaired, generation_duration_ms = await _generate_and_validate_sql(question)
 
     validation_status = "passed"
@@ -123,6 +132,8 @@ async def answer_with_sql(
             (
                 "human",
                 f"""
+{format_response_language_instruction(language)}
+
 User question:
 {question}
 

@@ -3,6 +3,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.services.language_detection import (
+    detect_response_language,
+    format_response_language_instruction,
+)
 from app.services.llm_service import get_chat_model
 from app.services.rag_cache_service import (
     get_cached_rag_result,
@@ -29,6 +33,9 @@ Rules:
 - Only cite sources that directly support the answer.
 - Return the source numbers that support the answer.
 - Answer clearly and concisely.
+- Write the entire answer in the requested response language.
+  Context may be in English; translate the user-facing answer as needed
+  without changing facts or inventing details.
 """.strip()
 
 
@@ -105,8 +112,11 @@ async def answer_question(
     limit: int = 5,
     filters: RetrievalFilters | None = None,
     retrieval_mode: RetrievalMode = "standard",
+    response_language: str | None = None,
 ) -> RagResult:
     import time
+
+    language = response_language or detect_response_language(question)
 
     cached = await get_cached_rag_result(
         tenant_id=tenant_id,
@@ -131,8 +141,13 @@ async def answer_question(
     chunks = run.chunks
 
     if not chunks:
+        empty_answer = (
+            "Sağlanan belgeler yeterli bilgi içermiyor."
+            if language == "tr"
+            else "The provided documents do not contain enough information."
+        )
         result = RagResult(
-            answer=("The provided documents do not contain enough information."),
+            answer=empty_answer,
             sources=[],
             retrieved_chunks=[],
             cache_hit=False,
@@ -151,6 +166,8 @@ async def answer_question(
     context = build_context(chunks)
 
     user_prompt = f"""
+{format_response_language_instruction(language)}
+
 Question:
 {question}
 

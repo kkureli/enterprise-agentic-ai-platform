@@ -11,6 +11,10 @@ class GeneratedSQL(BaseModel):
 SYSTEM_PROMPT = """
 You generate PostgreSQL SELECT queries for an enterprise operations system.
 
+The user question may be in English or Turkish. Map intent to the English
+schema below. Never invent Turkish table or column names; always use the
+exact English identifiers listed here.
+
 Available tables:
 
 assets:
@@ -63,6 +67,11 @@ Rules:
 - Never assume that tenant scope propagates through a JOIN.
 - Never use OR in the WHERE clause. Prefer AND and IN (...) instead.
 - Prefer simple alias names such as a, mr, mt.
+- Turkish examples of intent mapping (still use English identifiers in SQL):
+  "uyarı" / "warning" → status or issue filters as appropriate
+  "bakım kaydı" / "geçmiş" → maintenance_records
+  "bilet" / "ticket" → maintenance_tickets
+  "varlık" / "makine" → assets / asset_code
 
 Compliant join example:
 
@@ -89,12 +98,13 @@ You repair a rejected PostgreSQL SELECT query so it passes enterprise SQL safety
 validation.
 
 You will receive:
-- the original user question
+- the original user question (English or Turkish)
 - the rejected SQL
 - the exact validation error
 - a checklist of required alias.tenant_id predicates derived from the rejected SQL
 
 Fix the SQL while preserving the user's intent.
+Always keep English table/column identifiers from the enterprise schema.
 
 Hard requirements:
 - Exactly one SELECT statement

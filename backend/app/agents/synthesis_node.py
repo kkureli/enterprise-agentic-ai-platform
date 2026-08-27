@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.agents.execution_trace import node_trace
 from app.agents.state import AgentState
 from app.services.llm_service import get_chat_model
+from app.services.language_detection import format_response_language_instruction
 
 SYNTHESIS_SYSTEM_PROMPT = """
 You synthesize grounded evidence from multiple enterprise capabilities into one
@@ -23,6 +24,9 @@ Rules:
 - Prefer concrete operational details from the evidence.
 - Do not reveal hidden chain-of-thought or planner internals.
 - Keep the answer concise and professional.
+- Write the entire final answer in the requested response language.
+  Evidence may be in English; translate the user-facing answer as needed
+  without changing facts or inventing details.
 """.strip()
 
 
@@ -44,6 +48,7 @@ async def synthesis_node(state: AgentState) -> dict:
     sections: list[str] = [
         f"Tenant slug: {state.get('tenant_slug') or 'unknown'}",
         f"Selected capabilities: {', '.join(planned) or 'none'}",
+        format_response_language_instruction(state.get("response_language")),
         f"User question:\n{state['query']}",
     ]
 

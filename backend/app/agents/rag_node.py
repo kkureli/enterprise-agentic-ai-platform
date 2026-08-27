@@ -26,6 +26,7 @@ async def rag_node(state: AgentState) -> dict:
         tenant_id=state["tenant_id"],
         question=state["query"],
         retrieval_mode=state.get("retrieval_mode", "standard"),
+        response_language=state.get("response_language"),
     )
 
     timing: dict = {}

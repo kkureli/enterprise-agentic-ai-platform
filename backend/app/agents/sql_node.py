@@ -7,6 +7,7 @@ async def sql_node(state: AgentState) -> dict:
     result = await answer_with_sql(
         tenant_id=state["tenant_id"],
         question=state["query"],
+        response_language=state.get("response_language"),
     )
 
     timing = {}

@@ -11,6 +11,7 @@ AgentRoute = Literal[
 ]
 RetrievalMode = Literal["standard", "advanced"]
 ReadCapability = Literal["knowledge", "sql", "tool"]
+ResponseLanguage = Literal["en", "tr"]
 
 
 class AgentState(TypedDict, total=False):
@@ -18,6 +19,7 @@ class AgentState(TypedDict, total=False):
     tenant_slug: str
     query: str
     retrieval_mode: RetrievalMode
+    response_language: ResponseLanguage
 
     requires_approval: bool
     pending_action: dict

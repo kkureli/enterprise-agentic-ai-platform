@@ -26,6 +26,7 @@ from app.schemas.agent import (
     AgentResponse,
 )
 from app.services.client_identity import client_ip_from_request, hash_client_id
+from app.services.language_detection import detect_response_language
 from app.services.rate_limit_service import (
     check_client_rate_limit,
     check_compare_rate_limit,
@@ -158,6 +159,7 @@ async def _invoke_agent(
                 "tenant_slug": tenant_slug,
                 "query": question,
                 "retrieval_mode": retrieval_mode,
+                "response_language": detect_response_language(question),
             },
             config=config,
         )

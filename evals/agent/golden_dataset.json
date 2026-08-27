@@ -215,5 +215,44 @@
     "expected_approval": false,
     "tenant_slug": "atlas-manufacturing",
     "notes": "Same question shape as Borealis must not leak cold-chain meanings when evaluated per-tenant."
+  },
+
+  {
+    "id": "knowledge_tr_01",
+    "question": "AX-4317 hata kodu ne anlama geliyor?",
+    "expected_route": "knowledge",
+    "expected_approval": false
+  },
+  {
+    "id": "sql_tr_01",
+    "question": "MACHINE-42 için kaç bakım kaydı var?",
+    "expected_route": "sql",
+    "expected_approval": false
+  },
+  {
+    "id": "tool_tr_01",
+    "question": "MACHINE-42'nin güncel operasyonel durumu nedir?",
+    "expected_route": "tool",
+    "expected_approval": false
+  },
+  {
+    "id": "tool_tr_write_01",
+    "question": "MACHINE-42 için hidrolik basınç kaybı nedeniyle yüksek öncelikli bakım kaydı oluştur.",
+    "expected_route": "tool",
+    "expected_approval": true
+  },
+  {
+    "id": "unsupported_tr_01",
+    "question": "Bakım müdürüne e-posta gönder.",
+    "expected_route": "unsupported",
+    "expected_approval": false
+  },
+  {
+    "id": "composite_rag_mcp_tr_01",
+    "question": "E-100 ne demek ve MACHINE-42'nin güncel operasyonel durumu nedir?",
+    "expected_route": "knowledge",
+    "expected_routes": ["knowledge", "tool"],
+    "expected_approval": false,
+    "required_facts": ["E-100", "MACHINE-42"]
   }
 ]

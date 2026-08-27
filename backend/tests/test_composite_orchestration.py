@@ -13,8 +13,19 @@ from app.agents.graph import (
     route_after_planner,
     route_after_tool,
 )
-from app.agents.router import RoutePlan, finalize_plan, normalize_planned_routes
+from app.agents.router import (
+    PLANNER_SYSTEM_PROMPT,
+    RoutePlan,
+    finalize_plan,
+    normalize_planned_routes,
+)
 from app.services.mcp_client import call_maintenance_tool
+
+
+def test_planner_prompt_supports_turkish_and_english_intent():
+    assert "English or Turkish" in PLANNER_SYSTEM_PROMPT
+    assert "E-100 ne anlama geliyor?" in PLANNER_SYSTEM_PROMPT
+    assert "Hangi varlıklarda uyarı var?" in PLANNER_SYSTEM_PROMPT
 
 
 def test_normalize_planned_routes_dedupes_and_drops_unsupported_mix():

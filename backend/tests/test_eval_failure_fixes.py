@@ -241,6 +241,14 @@ def test_write_intent_detects_tool_06_phrasing():
     assert not _query_has_write_intent("What is the current operational status of MACHINE-42?")
 
 
+def test_write_intent_detects_turkish_phrasing():
+    assert _query_has_write_intent(
+        "MACHINE-42 için yüksek öncelikli bakım kaydı oluştur."
+    )
+    assert _query_has_write_intent("MACHINE-42 icin ticket olustur")
+    assert not _query_has_write_intent("MACHINE-42'nin güncel durumu nedir?")
+
+
 @pytest.mark.asyncio
 async def test_tool_06_requires_approval(monkeypatch):
     class FakeTool:
@@ -392,10 +400,44 @@ async def test_synthesis_uses_clean_evidence_not_tool_history(monkeypatch):
     )
     assert result["synthesis_answer"] == "Combined grounded answer."
     human = captured["messages"][1][1]
+    assert "Response language: English (en)." in human
     assert "Knowledge / RAG evidence" in human
     assert "SQL evidence" in human
     assert "MCP live tool evidence" in human
     assert "tool_calls" not in human
+
+
+@pytest.mark.asyncio
+async def test_synthesis_requests_turkish_response_language(monkeypatch):
+    captured: dict = {}
+
+    class FakeStructured:
+        async def ainvoke(self, messages):
+            captured["messages"] = messages
+            from app.agents.synthesis_node import SynthesisOutput
+
+            return SynthesisOutput(answer="Birleşik yanıt.")
+
+    class FakeModel:
+        def with_structured_output(self, schema):
+            return FakeStructured()
+
+    monkeypatch.setattr("app.agents.synthesis_node.get_chat_model", lambda: FakeModel())
+
+    result = await synthesis_node(
+        {
+            "query": "E-100 ne demek ve MACHINE-42 durumu nedir?",
+            "response_language": "tr",
+            "tenant_slug": "atlas-manufacturing",
+            "planned_routes": ["knowledge", "tool"],
+            "rag_answer": "E-100 means lubrication pressure below threshold.",
+            "tool_answer": "Status warning.",
+        }
+    )
+    assert result["synthesis_answer"] == "Birleşik yanıt."
+    human = captured["messages"][1][1]
+    assert "Response language: Turkish (tr)." in human
+    assert "requested response language" in captured["messages"][0][1]
 
 
 @pytest.mark.asyncio
