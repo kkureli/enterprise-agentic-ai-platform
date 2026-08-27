@@ -20,8 +20,7 @@ async def approval_node(state: AgentState) -> dict:
     if not approved:
         reject_message = (
             "GitHub Issue açma isteği reddedildi; dış yazma yapılmadı."
-            if state.get("response_language") == "tr"
-            and tool_name == "create_github_issue"
+            if state.get("response_language") == "tr" and tool_name == "create_github_issue"
             else (
                 "GitHub Issue creation was rejected; no external write was performed."
                 if tool_name == "create_github_issue"

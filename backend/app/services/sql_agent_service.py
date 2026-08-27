@@ -93,9 +93,7 @@ async def _generate_and_validate_sql(question: str) -> tuple[str, bool, float]:
             # Second validation must pass; never execute rejected SQL.
             validate_readonly_sql(sql)
         except UnsafeSQLQueryError as second_error:
-            generation_duration_ms = round(
-                (time.perf_counter() - generation_started) * 1000, 2
-            )
+            generation_duration_ms = round((time.perf_counter() - generation_started) * 1000, 2)
             raise UnsafeSQLQueryError(
                 f"SQL remained unsafe after one repair attempt: {second_error}"
             ) from second_error

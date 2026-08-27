@@ -82,8 +82,7 @@ _EXPLICIT_LANGUAGE_PATTERNS: list[tuple[re.Pattern[str], ResponseLanguage]] = [
             r"|respond\s+in\s+turkish"
             r"|in\s+turkish\s+please"
             r"|reply\s+in\s+turkish"
-            r")"
-            ,
+            r")",
             re.IGNORECASE,
         ),
         "tr",
@@ -99,8 +98,7 @@ _EXPLICIT_LANGUAGE_PATTERNS: list[tuple[re.Pattern[str], ResponseLanguage]] = [
             r"|respond\s+in\s+english"
             r"|in\s+english\s+please"
             r"|reply\s+in\s+english"
-            r")"
-            ,
+            r")",
             re.IGNORECASE,
         ),
         "en",

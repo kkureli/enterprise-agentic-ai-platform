@@ -64,9 +64,7 @@ async def synthesis_node(state: AgentState) -> dict:
     if "tool" in planned:
         sections.append(_block("MCP live tool evidence", state.get("tool_answer")))
     if "external_risk_assessment" in planned:
-        sections.append(
-            _block("A2A external risk evidence", state.get("a2a_answer"))
-        )
+        sections.append(_block("A2A external risk evidence", state.get("a2a_answer")))
 
     model = get_chat_model().with_structured_output(SynthesisOutput)
     result = await model.ainvoke(

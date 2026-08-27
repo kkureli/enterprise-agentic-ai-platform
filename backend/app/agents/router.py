@@ -10,9 +10,7 @@ from app.agents.execution_trace import node_trace
 from app.agents.state import AgentRoute, AgentState, ReadCapability
 from app.services.llm_service import get_chat_model
 
-READ_ROUTES: frozenset[str] = frozenset(
-    {"knowledge", "sql", "tool", "external_risk_assessment"}
-)
+READ_ROUTES: frozenset[str] = frozenset({"knowledge", "sql", "tool", "external_risk_assessment"})
 
 
 class RoutePlan(BaseModel):

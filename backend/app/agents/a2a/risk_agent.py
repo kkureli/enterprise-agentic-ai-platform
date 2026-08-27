@@ -73,29 +73,41 @@ async def collect_internal_company_evidence(
             return []
 
         revenue_rows = (
-            await session.execute(
-                select(CompanyRevenue).where(
-                    CompanyRevenue.tenant_id == tenant_id,
-                    CompanyRevenue.company_id == company.id,
+            (
+                await session.execute(
+                    select(CompanyRevenue).where(
+                        CompanyRevenue.tenant_id == tenant_id,
+                        CompanyRevenue.company_id == company.id,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         transactions = (
-            await session.execute(
-                select(CompanyTransaction).where(
-                    CompanyTransaction.tenant_id == tenant_id,
-                    CompanyTransaction.company_id == company.id,
+            (
+                await session.execute(
+                    select(CompanyTransaction).where(
+                        CompanyTransaction.tenant_id == tenant_id,
+                        CompanyTransaction.company_id == company.id,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         payments = (
-            await session.execute(
-                select(CompanyPayment).where(
-                    CompanyPayment.tenant_id == tenant_id,
-                    CompanyPayment.company_id == company.id,
+            (
+                await session.execute(
+                    select(CompanyPayment).where(
+                        CompanyPayment.tenant_id == tenant_id,
+                        CompanyPayment.company_id == company.id,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     evidence: list[EvidenceItem] = [
         EvidenceItem(
@@ -112,10 +124,7 @@ async def collect_internal_company_evidence(
     for row in revenue_rows:
         evidence.append(
             EvidenceItem(
-                summary=(
-                    f"Revenue {row.metric} {row.period_label}: "
-                    f"{row.amount} {row.currency}."
-                ),
+                summary=(f"Revenue {row.metric} {row.period_label}: {row.amount} {row.currency}."),
                 source_type="sql",
                 source_title="company_revenue",
                 confidence=0.95,
@@ -153,9 +162,7 @@ def _evidence_block(title: str, items: list[EvidenceItem]) -> str:
         return f"### {title}\n(none)"
     lines = [f"### {title}"]
     for item in items:
-        lines.append(
-            f"- [{item.source_type}] {item.source_title or 'n/a'}: {item.summary}"
-        )
+        lines.append(f"- [{item.source_type}] {item.source_title or 'n/a'}: {item.summary}")
     return "\n".join(lines)
 
 
@@ -262,11 +269,7 @@ async def run_risk_assessment(
         response_language=response_language,
     )
 
-    if not (
-        allow_a2a_follow_up
-        and first.needs_more_evidence
-        and first.follow_up_task is not None
-    ):
+    if not (allow_a2a_follow_up and first.needs_more_evidence and first.follow_up_task is not None):
         return first, intelligence_used, False
 
     # A2A delegation: Risk → Company Intelligence → Risk (single bounded hop).

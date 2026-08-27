@@ -89,8 +89,7 @@ def _format_risk_answer(
         )
     if intelligence and intelligence.entity.company_name:
         lines.append(
-            f"Entity: {intelligence.entity.company_name} "
-            f"({intelligence.entity.domain or 'n/a'})"
+            f"Entity: {intelligence.entity.company_name} ({intelligence.entity.domain or 'n/a'})"
         )
     return "\n".join(lines)
 
@@ -133,8 +132,7 @@ async def run_a2a_external_risk_pipeline(
             "yanlış şirket araştırması yapılmadı."
             if response_language == "tr"
             else (
-                f"Entity resolution failed for {resolved_company}; "
-                "refusing wrong-company research."
+                f"Entity resolution failed for {resolved_company}; refusing wrong-company research."
             )
         )
         return A2APipelineResult(

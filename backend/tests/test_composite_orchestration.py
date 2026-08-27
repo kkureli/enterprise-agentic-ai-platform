@@ -35,12 +35,12 @@ def test_planner_prompt_includes_external_risk_assessment():
 
 
 def test_normalize_keeps_external_risk_assessment():
-    assert normalize_planned_routes(["external_risk_assessment"]) == [
-        "external_risk_assessment"
+    assert normalize_planned_routes(["external_risk_assessment"]) == ["external_risk_assessment"]
+    assert normalize_planned_routes(["sql", "knowledge", "external_risk_assessment"]) == [
+        "sql",
+        "knowledge",
+        "external_risk_assessment",
     ]
-    assert normalize_planned_routes(
-        ["sql", "knowledge", "external_risk_assessment"]
-    ) == ["sql", "knowledge", "external_risk_assessment"]
     plan = finalize_plan(
         RoutePlan(
             routes=["sql", "knowledge", "external_risk_assessment"],

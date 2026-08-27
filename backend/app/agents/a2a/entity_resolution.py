@@ -77,8 +77,10 @@ async def resolve_company_entity(
 
     async with SessionLocal() as session:
         rows = (
-            await session.execute(select(Company).where(Company.tenant_id == tenant_id))
-        ).scalars().all()
+            (await session.execute(select(Company).where(Company.tenant_id == tenant_id)))
+            .scalars()
+            .all()
+        )
 
     matches: list[EntityResolution] = []
     for row in rows:

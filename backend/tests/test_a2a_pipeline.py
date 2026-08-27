@@ -30,9 +30,7 @@ async def test_a2a_pipeline_end_to_end_with_mocks(monkeypatch) -> None:
                 unresolved=False,
             ),
             search_queries=["Microsoft risk"],
-            evidence=[
-                EvidenceItem(summary="Public profile evidence.", source_type="web")
-            ],
+            evidence=[EvidenceItem(summary="Public profile evidence.", source_type="web")],
             findings=["External profile collected."],
             evidence_sufficient=True,
         )

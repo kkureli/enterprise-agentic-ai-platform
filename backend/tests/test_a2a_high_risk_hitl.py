@@ -67,10 +67,7 @@ def test_build_github_escalation_pending_action() -> None:
 
 
 def test_route_after_a2a_prioritizes_synthesis_then_approval() -> None:
-    assert (
-        route_after_a2a({"requires_synthesis": True, "requires_approval": True})
-        == "synthesize"
-    )
+    assert route_after_a2a({"requires_synthesis": True, "requires_approval": True}) == "synthesize"
     assert route_after_a2a({"requires_approval": True}) == "approval"
     assert route_after_a2a({}) == "finalize"
 
@@ -267,9 +264,10 @@ async def test_a2a_medium_risk_reject_never_calls_github_mcp(monkeypatch):
     )
     assert mcp_calls["n"] == 0
     assert result.get("approval_granted") is False
-    assert "rejected" in result["final_answer"].lower() or "reddedildi" in result[
-        "final_answer"
-    ].lower()
+    assert (
+        "rejected" in result["final_answer"].lower()
+        or "reddedildi" in result["final_answer"].lower()
+    )
     assert "Risk level: medium" in result["final_answer"]
 
 

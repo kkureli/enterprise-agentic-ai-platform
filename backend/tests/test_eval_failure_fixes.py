@@ -242,9 +242,7 @@ def test_write_intent_detects_tool_06_phrasing():
 
 
 def test_write_intent_detects_turkish_phrasing():
-    assert _query_has_write_intent(
-        "MACHINE-42 için yüksek öncelikli bakım kaydı oluştur."
-    )
+    assert _query_has_write_intent("MACHINE-42 için yüksek öncelikli bakım kaydı oluştur.")
     assert _query_has_write_intent("MACHINE-42 icin ticket olustur")
     assert not _query_has_write_intent("MACHINE-42'nin güncel durumu nedir?")
 

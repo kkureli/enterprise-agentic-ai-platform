@@ -72,9 +72,7 @@ async def a2a_risk_node(state: AgentState) -> dict:
         updates["rag_answer"] = rag_answer
 
     # Medium/high risk → HITL before any GitHub write (MCP create_github_issue).
-    if result.risk is not None and should_request_github_escalation(
-        result.risk.risk_level
-    ):
+    if result.risk is not None and should_request_github_escalation(result.risk.risk_level):
         tenant_slug = state.get("tenant_slug") or "unknown"
         hitl = build_github_escalation_pending_action(
             tenant_slug=tenant_slug,

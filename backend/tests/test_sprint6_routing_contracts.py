@@ -7,9 +7,7 @@ from pathlib import Path
 
 from app.agents.router import PLANNER_SYSTEM_PROMPT, READ_ROUTES, normalize_planned_routes
 
-GOLDEN_PATH = (
-    Path(__file__).resolve().parents[2] / "evals" / "agent" / "golden_dataset.json"
-)
+GOLDEN_PATH = Path(__file__).resolve().parents[2] / "evals" / "agent" / "golden_dataset.json"
 
 
 def test_read_routes_include_external_risk() -> None:
@@ -30,10 +28,7 @@ def test_planner_prompt_routes_external_investigation_to_a2a() -> None:
 
 
 def test_planner_prompt_full_risk_is_composite() -> None:
-    assert (
-        '→ routes=["sql","knowledge","external_risk_assessment"]'
-        in PLANNER_SYSTEM_PROMPT
-    )
+    assert '→ routes=["sql","knowledge","external_risk_assessment"]' in PLANNER_SYSTEM_PROMPT
 
 
 def test_golden_routing_contracts() -> None:

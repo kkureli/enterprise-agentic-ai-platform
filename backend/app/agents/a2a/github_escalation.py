@@ -39,9 +39,7 @@ def build_github_escalation_pending_action(
     level_label = level.upper()
     title = f"[Risk:{level_label}] {company} — external risk escalation"
     reasons = "\n".join(f"- {item}" for item in risk.reasons) or "- (none)"
-    actions = (
-        "\n".join(f"- {item}" for item in risk.recommended_actions) or "- (none)"
-    )
+    actions = "\n".join(f"- {item}" for item in risk.recommended_actions) or "- (none)"
     body = (
         f"## A2A {level} risk escalation\n\n"
         f"**Company:** {company}\n"
@@ -65,8 +63,7 @@ def build_github_escalation_pending_action(
         )
     else:
         approval_message = (
-            f"{level_label} risk detected. "
-            "Approval is required to open a GitHub Issue."
+            f"{level_label} risk detected. Approval is required to open a GitHub Issue."
         )
     pending_action = {
         "tool_name": "create_github_issue",

@@ -53,8 +53,6 @@ def test_last_explicit_preference_wins() -> None:
         == "en"
     )
     assert (
-        detect_response_language(
-            "What is Spotify revenue? answer in English. Türkçe cevap ver"
-        )
+        detect_response_language("What is Spotify revenue? answer in English. Türkçe cevap ver")
         == "tr"
     )

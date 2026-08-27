@@ -43,9 +43,7 @@ async def fetch_wikipedia_summary(title: str) -> EvidenceItem | None:
         extract = (payload.get("extract") or "").strip()
         if not extract:
             return None
-        page_url = (
-            (payload.get("content_urls") or {}).get("desktop", {}) or {}
-        ).get("page") or url
+        page_url = ((payload.get("content_urls") or {}).get("desktop", {}) or {}).get("page") or url
         return EvidenceItem(
             summary=extract[:1200],
             source_type="web",

@@ -31,12 +31,9 @@ async def approved_action_node(state: AgentState) -> dict:
         else:
             escalation_note = ""
             if result.get("risk_escalation_id"):
-                escalation_note = (
-                    f" Internal escalation {result['risk_escalation_id']} recorded."
-                )
+                escalation_note = f" Internal escalation {result['risk_escalation_id']} recorded."
             tool_answer = (
-                f"GitHub issue created successfully: {result['external_url']}."
-                f"{escalation_note}"
+                f"GitHub issue created successfully: {result['external_url']}.{escalation_note}"
             )
     else:
         tool_answer = (
@@ -58,9 +55,7 @@ async def approved_action_node(state: AgentState) -> dict:
                 "action_result": safe_result,
             },
             tools={
-                "mcp_server": (
-                    "github" if tool_name == "create_github_issue" else "maintenance"
-                ),
+                "mcp_server": ("github" if tool_name == "create_github_issue" else "maintenance"),
                 "tool_name": tool_name,
                 "arguments": (state.get("pending_action") or {}).get("arguments"),
                 "tool_type": "write",
