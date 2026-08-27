@@ -27,31 +27,41 @@ def test_github_escalation_dedupe_key() -> None:
         github_escalation_dedupe_key(
             tenant_slug="Northstar-Commercial",
             company_query="Microsoft",
+            risk_level="high",
         )
         == "northstar-commercial:microsoft:external_risk:high"
+    )
+    assert (
+        github_escalation_dedupe_key(
+            tenant_slug="northstar-commercial",
+            company_query="Microsoft",
+            risk_level="medium",
+        )
+        == "northstar-commercial:microsoft:external_risk:medium"
     )
 
 
 def test_build_github_escalation_pending_action() -> None:
     risk = RiskAssessmentResult(
-        risk_level="high",
-        confidence=0.9,
-        reasons=["at_risk"],
+        risk_level="medium",
+        confidence=0.75,
+        reasons=["at_risk signals"],
         recommended_actions=["Escalate"],
     )
     payload = build_github_escalation_pending_action(
         tenant_slug="northstar-commercial",
         company_query="Microsoft",
         risk=risk,
-        assessment_answer="Risk level: high",
+        assessment_answer="Risk level: medium",
         response_language="en",
     )
     assert payload["requires_approval"] is True
     assert payload["pending_action"]["tool_name"] == "create_github_issue"
     args = payload["pending_action"]["arguments"]
     assert args["tenant_slug"] == "northstar-commercial"
-    assert args["dedupe_key"].endswith(":external_risk:high")
-    assert "Microsoft" in args["title"]
+    assert args["dedupe_key"].endswith(":external_risk:medium")
+    assert "[Risk:MEDIUM]" in args["title"]
+    assert "MEDIUM risk detected" in payload["tool_answer"]
 
 
 def test_route_after_a2a_prioritizes_synthesis_then_approval() -> None:
@@ -129,22 +139,74 @@ async def test_a2a_risk_node_requests_hitl_on_high(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a2a_risk_node_skips_hitl_on_medium(monkeypatch) -> None:
+async def test_a2a_risk_node_requests_hitl_on_medium(monkeypatch) -> None:
+    async def fake_rag(**kwargs):
+        return SimpleNamespace(answer="Contract note.")
+
+    async def fake_pipeline(**kwargs):
+        risk = RiskAssessmentResult(
+            risk_level="medium",
+            confidence=0.75,
+            reasons=["Account watch signals"],
+            recommended_actions=["Monitor closely"],
+        )
+        intel = CompanyIntelligenceResult(
+            company_query="Microsoft",
+            entity=EntityResolution(
+                company_name="Microsoft",
+                domain="microsoft.com",
+                unresolved=False,
+            ),
+            search_queries=["Microsoft"],
+            evidence=[EvidenceItem(summary="Public profile.", source_type="web")],
+            findings=["Profile collected."],
+            evidence_sufficient=True,
+        )
+        return A2APipelineResult(
+            company_query="Microsoft",
+            intelligence=intel,
+            risk=risk,
+            answer="Risk level: medium\nConfidence: 0.75",
+            a2a_follow_up_used=False,
+        )
+
+    monkeypatch.setattr("app.agents.a2a_risk_node.answer_question", fake_rag)
+    monkeypatch.setattr(
+        "app.agents.a2a_risk_node.run_a2a_external_risk_pipeline",
+        fake_pipeline,
+    )
+
+    result = await a2a_risk_node(
+        {
+            "tenant_id": uuid4(),
+            "tenant_slug": "northstar-commercial",
+            "query": "Assess Microsoft external risks.",
+            "response_language": "en",
+            "planned_routes": ["external_risk_assessment"],
+        }
+    )
+    assert result["requires_approval"] is True
+    assert result["pending_action"]["tool_name"] == "create_github_issue"
+    assert "MEDIUM" in result["tool_answer"]
+
+
+@pytest.mark.asyncio
+async def test_a2a_risk_node_skips_hitl_on_low(monkeypatch) -> None:
     async def fake_rag(**kwargs):
         return SimpleNamespace(answer=None)
 
     async def fake_pipeline(**kwargs):
         risk = RiskAssessmentResult(
-            risk_level="medium",
+            risk_level="low",
             confidence=0.6,
-            reasons=["Limited signals"],
-            recommended_actions=["Monitor"],
+            reasons=["Healthy signals"],
+            recommended_actions=["Continue monitoring"],
         )
         return A2APipelineResult(
             company_query="Spotify",
             intelligence=None,
             risk=risk,
-            answer="Risk level: medium",
+            answer="Risk level: low",
             a2a_follow_up_used=False,
         )
 

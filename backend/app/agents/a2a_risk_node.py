@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from app.agents.a2a import run_a2a_external_risk_pipeline
-from app.agents.a2a.github_escalation import build_github_escalation_pending_action
+from app.agents.a2a.github_escalation import (
+    build_github_escalation_pending_action,
+    should_request_github_escalation,
+)
 from app.agents.execution_trace import node_trace
 from app.agents.state import AgentState
 from app.services.rag_service import answer_question
@@ -68,8 +71,10 @@ async def a2a_risk_node(state: AgentState) -> dict:
     if rag_answer and not (state.get("rag_answer") or "").strip():
         updates["rag_answer"] = rag_answer
 
-    # HIGH risk → HITL before any GitHub write (MCP create_github_issue).
-    if result.risk is not None and result.risk.risk_level == "high":
+    # Medium/high risk → HITL before any GitHub write (MCP create_github_issue).
+    if result.risk is not None and should_request_github_escalation(
+        result.risk.risk_level
+    ):
         tenant_slug = state.get("tenant_slug") or "unknown"
         hitl = build_github_escalation_pending_action(
             tenant_slug=tenant_slug,

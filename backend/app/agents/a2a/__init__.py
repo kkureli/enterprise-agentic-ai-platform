@@ -4,6 +4,7 @@ from app.agents.a2a.entity_resolution import resolve_company_entity, resolve_com
 from app.agents.a2a.github_escalation import (
     build_github_escalation_pending_action,
     github_escalation_dedupe_key,
+    should_request_github_escalation,
 )
 from app.agents.a2a.pipeline import A2APipelineResult, run_a2a_external_risk_pipeline
 from app.agents.a2a.risk_agent import run_risk_assessment
@@ -30,4 +31,5 @@ __all__ = [
     "run_a2a_external_risk_pipeline",
     "run_company_intelligence",
     "run_risk_assessment",
+    "should_request_github_escalation",
 ]
