@@ -74,6 +74,12 @@ class Settings(BaseSettings):
     # or /app/mcp when packaged in the production image.
     mcp_server_dir: str | None = None
 
+    # Real GitHub Issues via MCP create_github_issue (HITL-gated on the host).
+    # Token needs Issues write on GITHUB_REPO (default: this portfolio repo).
+    github_token: str | None = None
+    github_repo: str = "kkureli/enterprise-agentic-ai-platform"
+    github_api_base: str = "https://api.github.com"
+
     cors_origins: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",

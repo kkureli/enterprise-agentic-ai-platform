@@ -6,6 +6,7 @@ from app.models.company import (
     CompanyTransaction,
 )
 from app.models.document import Document
+from app.models.external_action_link import ExternalActionLink
 from app.models.maintenance_record import MaintenanceRecord
 from app.models.maintenance_ticket import MaintenanceTicket
 from app.models.tenant import Tenant
@@ -18,6 +19,7 @@ __all__ = [
     "CompanyRevenue",
     "CompanyTransaction",
     "Document",
+    "ExternalActionLink",
     "Tenant",
     "User",
     "MaintenanceRecord",

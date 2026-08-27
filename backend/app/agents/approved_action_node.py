@@ -14,15 +14,33 @@ async def approved_action_node(state: AgentState) -> dict:
         "priority": result.get("priority"),
         "status": result.get("status"),
         "asset_code": result.get("asset_code"),
+        "external_url": result.get("external_url"),
+        "external_id": result.get("external_id"),
+        "deduplicated": result.get("deduplicated"),
+        "provider": result.get("provider"),
     }
+
+    tool_name = (state.get("pending_action") or {}).get("tool_name")
+    if tool_name == "create_github_issue" and result.get("external_url"):
+        if result.get("deduplicated"):
+            tool_answer = (
+                f"GitHub issue already exists for this evaluation "
+                f"({result['external_url']}); skipped duplicate create."
+            )
+        else:
+            tool_answer = (
+                f"GitHub issue created successfully: {result['external_url']}"
+            )
+    else:
+        tool_answer = (
+            f"Maintenance ticket {result['ticket_id']} was created "
+            f"successfully with priority {result['priority']}."
+        )
 
     return {
         "requires_approval": False,
         "action_result": result,
-        "tool_answer": (
-            f"Maintenance ticket {result['ticket_id']} was created "
-            f"successfully with priority {result['priority']}."
-        ),
+        "tool_answer": tool_answer,
         **node_trace(
             "approved_action",
             route="tool",
@@ -33,8 +51,10 @@ async def approved_action_node(state: AgentState) -> dict:
                 "action_result": safe_result,
             },
             tools={
-                "mcp_server": "maintenance",
-                "tool_name": (state.get("pending_action") or {}).get("tool_name"),
+                "mcp_server": (
+                    "github" if tool_name == "create_github_issue" else "maintenance"
+                ),
+                "tool_name": tool_name,
                 "arguments": (state.get("pending_action") or {}).get("arguments"),
                 "tool_type": "write",
                 "requires_approval": True,
