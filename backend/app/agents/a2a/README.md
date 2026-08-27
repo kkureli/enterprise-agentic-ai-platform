@@ -41,6 +41,12 @@ print(result.answer)
 print(result.state_updates())  # for AgentState
 ```
 
-## Not in Sprint 3
+## LangGraph
 
-LangGraph planner route `external_risk_assessment` and playground auto-routing are **Sprint 4**.
+Planner capability `external_risk_assessment` maps to graph node `a2a_risk`
+(`a2a_risk_node` → `run_a2a_external_risk_pipeline`).
+
+On the **single-route** path the node also loads RAG context (contracts /
+account reviews) so Risk Agent sees SQL + RAG + public web evidence.
+When `knowledge` is already planned (composite), RAG is left to the parallel
+`rag` node / synthesis path.

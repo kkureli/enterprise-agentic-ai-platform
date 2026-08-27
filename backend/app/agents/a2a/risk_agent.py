@@ -17,6 +17,7 @@ from app.agents.a2a.schemas import (
 )
 from app.db.session import SessionLocal
 from app.models.company import Company, CompanyPayment, CompanyRevenue, CompanyTransaction
+from app.services.language_detection import format_response_language_instruction
 from app.services.llm_service import get_chat_model
 
 _RISK_PROMPT = """
@@ -26,9 +27,11 @@ Assess risk using ONLY the provided evidence blocks (SQL/internal, RAG, and
 external A2A intelligence). Do not invent facts.
 
 Rules:
-- risk_level must be one of: low, medium, high
+- risk_level must be one of: low, medium, high (English enum values only)
 - confidence is between 0 and 1
 - reasons and recommended_actions must be grounded in evidence
+- Write every reason and recommended_action in the requested response language
+  (Turkish or English). Do not mix languages in those fields.
 - If external/public evidence is missing or too thin for a confident call,
   set needs_more_evidence=true and provide a follow_up_task aimed at the
   company_intelligence agent with a concrete research request.
@@ -163,6 +166,7 @@ async def _assess_risk(
     sql_evidence: list[EvidenceItem],
     rag_evidence: list[EvidenceItem],
     external_evidence: list[EvidenceItem],
+    response_language: str = "en",
 ) -> RiskAssessmentResult:
     model = get_chat_model().with_structured_output(_RiskDraft)
     draft = await model.ainvoke(
@@ -171,6 +175,7 @@ async def _assess_risk(
             (
                 "human",
                 (
+                    f"{format_response_language_instruction(response_language)}\n"
                     f"User question: {question}\n"
                     f"Company query: {company_query}\n\n"
                     f"{_evidence_block('SQL / internal evidence', sql_evidence)}\n\n"
@@ -217,7 +222,6 @@ async def run_risk_assessment(
     """Run Risk Agent; optionally delegate one A2A follow-up research task.
 
     Returns (final_risk, intelligence_used, a2a_follow_up_executed).
-    Graph wiring comes in Sprint 4.
     """
 
     sql_evidence = await collect_internal_company_evidence(
@@ -255,6 +259,7 @@ async def run_risk_assessment(
         sql_evidence=sql_evidence,
         rag_evidence=rag_evidence,
         external_evidence=external_evidence,
+        response_language=response_language,
     )
 
     if not (
@@ -290,6 +295,7 @@ async def run_risk_assessment(
         sql_evidence=sql_evidence,
         rag_evidence=rag_evidence,
         external_evidence=external_evidence,
+        response_language=response_language,
     )
     # Prevent unbounded loops even if the model asks again.
     if final.needs_more_evidence:
@@ -297,9 +303,14 @@ async def run_risk_assessment(
         final.follow_up_task = None
         if not final.reasons:
             final.reasons = list(first.reasons)
+        follow_up_note = (
+            "A2A follow-up araştırması tamamlandı; mevcut kanıtlarla devam edildi."
+            if response_language == "tr"
+            else "A2A follow-up research completed; proceeding with available evidence."
+        )
         final.reasons = [
             *final.reasons,
-            "A2A follow-up research completed; proceeding with available evidence.",
+            follow_up_note,
         ]
     else:
         final.follow_up_task = follow

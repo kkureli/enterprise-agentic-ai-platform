@@ -1,6 +1,6 @@
-"""End-to-end A2A external risk pipeline (Sprint 3).
+"""End-to-end A2A external risk pipeline.
 
-LangGraph capability wiring (`external_risk_assessment`) is Sprint 4.
+Wired into LangGraph via `a2a_risk_node` / route `external_risk_assessment`.
 """
 
 from __future__ import annotations
@@ -35,6 +35,12 @@ class A2APipelineResult:
         return updates
 
 
+def _format_risk_level(level: str, response_language: str) -> str:
+    if response_language != "tr":
+        return level
+    return {"low": "düşük", "medium": "orta", "high": "yüksek"}.get(level, level)
+
+
 def _format_risk_answer(
     *,
     risk: RiskAssessmentResult,
@@ -42,9 +48,11 @@ def _format_risk_answer(
     response_language: str,
     follow_up_used: bool,
 ) -> str:
+    level_label = _format_risk_level(risk.risk_level, response_language)
+
     if response_language == "tr":
         lines = [
-            f"Risk seviyesi: {risk.risk_level}",
+            f"Risk seviyesi: {level_label}",
             f"Güven: {risk.confidence:.2f}",
         ]
         if risk.reasons:
@@ -59,13 +67,13 @@ def _format_risk_answer(
             )
         if intelligence and intelligence.entity.company_name:
             lines.append(
-                f"Entity: {intelligence.entity.company_name} "
+                f"Şirket: {intelligence.entity.company_name} "
                 f"({intelligence.entity.domain or 'n/a'})"
             )
         return "\n".join(lines)
 
     lines = [
-        f"Risk level: {risk.risk_level}",
+        f"Risk level: {level_label}",
         f"Confidence: {risk.confidence:.2f}",
     ]
     if risk.reasons:

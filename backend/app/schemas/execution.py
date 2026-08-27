@@ -57,6 +57,14 @@ class ToolDetails(BaseModel):
     tenant_slug: str | None = None
 
 
+class A2aDetails(BaseModel):
+    company_query: str | None = None
+    follow_up_used: bool | None = None
+    risk_level: str | None = None
+    confidence: float | None = None
+    rag_context_used: bool | None = None
+
+
 class HitlDetails(BaseModel):
     required: bool | None = None
     approved: bool | None = None
@@ -101,6 +109,7 @@ class ExecutionDetails(BaseModel):
     sources: list[RetrievalChunkDetail] | None = None
     sql: SqlDetails | None = None
     tools: ToolDetails | None = None
+    a2a: A2aDetails | None = None
     hitl: HitlDetails | None = None
     cache: CacheDetails | None = None
     llm_usage: LlmUsageDetails | None = None

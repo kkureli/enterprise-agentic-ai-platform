@@ -128,19 +128,25 @@ const PROMPTS_BY_TENANT: Record<string, ExamplePrompt[]> = {
         "What is Spotify's annual revenue, and what does the Spotify MSA say about termination?",
     },
     {
-      category: 'Structured Data / SQL',
-      label: 'Spotify cirosu (TR)',
-      prompt: "Spotify'ın cirosu nedir?",
-    },
-    {
       category: 'Composite / Synthesis',
       label: 'Microsoft external risk (A2A)',
-      prompt: 'Assess Microsoft external and internal risks.',
+      prompt: 'Assess Microsoft external risks.',
     },
     {
       category: 'Composite / Synthesis',
       label: 'Spotify dış risk (TR A2A)',
       prompt: "Spotify'ın dış risklerini araştır.",
+    },
+    {
+      category: 'Composite / Synthesis',
+      label: 'Spotify SQL + RAG + A2A',
+      prompt:
+        'Evaluate Spotify using internal data, contract terms, and current external risks.',
+    },
+    {
+      category: 'Structured Data / SQL',
+      label: 'Spotify cirosu (TR)',
+      prompt: "Spotify'ın cirosu nedir?",
     },
   ],
 }

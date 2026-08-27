@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.agents.a2a.entity_resolution import resolve_company_entity
 from app.agents.a2a.schemas import CompanyIntelligenceResult, EntityResolution, EvidenceItem
 from app.agents.a2a.web_research import collect_public_evidence
+from app.services.language_detection import format_response_language_instruction
 from app.services.llm_service import get_chat_model
 
 
@@ -39,6 +40,8 @@ Using ONLY the provided entity and evidence snippets, produce short findings.
 Do not invent facts beyond the evidence. If evidence is thin, set
 evidence_sufficient=false and explain in notes.
 Keep company identity exact (name/domain/internal id).
+Write findings (and notes, if any) in the requested response language
+(Turkish or English). Do not mix languages in those fields.
 """.strip()
 
 
@@ -83,12 +86,17 @@ async def _synthesize_findings(
     entity: EntityResolution,
     evidence: list[EvidenceItem],
     research_focus: str | None,
+    response_language: str = "en",
 ) -> _Findings:
     if not evidence:
         return _Findings(
             findings=[],
             evidence_sufficient=False,
-            notes="No public evidence collected.",
+            notes=(
+                "Herkese açık kanıt toplanamadı."
+                if response_language == "tr"
+                else "No public evidence collected."
+            ),
         )
 
     model = get_chat_model().with_structured_output(_Findings)
@@ -106,6 +114,7 @@ async def _synthesize_findings(
             (
                 "human",
                 (
+                    f"{format_response_language_instruction(response_language)}\n"
                     f"Company query: {company_query}\n"
                     f"Research focus: {research_focus or company_query}\n"
                     f"Entity: {entity.model_dump()}\n\n"
@@ -126,7 +135,7 @@ async def run_company_intelligence(
 ) -> CompanyIntelligenceResult:
     """Run Company Intelligence research for a tenant-scoped company query.
 
-    Not wired into LangGraph yet — Sprint 4 adds external_risk_assessment routing.
+    Invoked by the A2A risk pipeline / LangGraph ``a2a_risk`` node.
     """
 
     entity = await resolve_company_entity(tenant_id=tenant_id, company_query=company_query)
@@ -160,6 +169,7 @@ async def run_company_intelligence(
         entity=entity,
         evidence=evidence,
         research_focus=research_focus,
+        response_language=response_language,
     )
 
     return CompanyIntelligenceResult(

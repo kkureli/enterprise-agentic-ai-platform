@@ -2,7 +2,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.agents.a2a.risk_agent import run_risk_assessment
+from app.agents.a2a.risk_agent import _RISK_PROMPT, run_risk_assessment
 from app.agents.a2a.schemas import (
     A2AFollowUpTask,
     CompanyIntelligenceResult,
@@ -148,3 +148,8 @@ async def test_risk_agent_skips_follow_up_when_disabled(monkeypatch) -> None:
     assert intelligence is None
     assert risk.needs_more_evidence is True
     assert follow_up_used is False
+
+
+def test_risk_prompt_requires_response_language_for_user_facing_fields() -> None:
+    assert "requested response language" in _RISK_PROMPT
+    assert "risk_level must be one of: low, medium, high" in _RISK_PROMPT

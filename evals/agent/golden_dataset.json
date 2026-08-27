@@ -288,5 +288,39 @@
     "expected_approval": false,
     "tenant_slug": "northstar-commercial",
     "required_facts": ["Spotify"]
+  },
+  {
+    "id": "a2a_external_risk_01",
+    "question": "Assess Microsoft external risks.",
+    "expected_route": "external_risk_assessment",
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Microsoft"]
+  },
+  {
+    "id": "a2a_external_risk_tr_01",
+    "question": "Spotify'ın dış risklerini araştır.",
+    "expected_route": "external_risk_assessment",
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Spotify"]
+  },
+  {
+    "id": "composite_a2a_company_01",
+    "question": "Evaluate Spotify using internal data, contract terms, and current external risks.",
+    "expected_route": "sql",
+    "expected_routes": ["sql", "knowledge", "external_risk_assessment"],
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Spotify"]
+  },
+  {
+    "id": "composite_a2a_company_tr_01",
+    "question": "Spotify'ın iç verilerini, sözleşmesini ve güncel dış risklerini değerlendir.",
+    "expected_route": "sql",
+    "expected_routes": ["sql", "knowledge", "external_risk_assessment"],
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Spotify"]
   }
 ]

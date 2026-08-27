@@ -73,6 +73,57 @@ async def test_a2a_pipeline_end_to_end_with_mocks(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_a2a_pipeline_formats_turkish_answer(monkeypatch) -> None:
+    async def fake_intelligence(**kwargs):
+        assert kwargs["response_language"] == "tr"
+        return CompanyIntelligenceResult(
+            company_query="Spotify",
+            entity=EntityResolution(
+                company_name="Spotify",
+                domain="spotify.com",
+                unresolved=False,
+            ),
+            search_queries=["Spotify risk"],
+            evidence=[EvidenceItem(summary="Profil.", source_type="web")],
+            findings=["Kamuya açık profil toplandı."],
+            evidence_sufficient=True,
+        )
+
+    async def fake_risk(**kwargs):
+        assert kwargs["response_language"] == "tr"
+        return (
+            RiskAssessmentResult(
+                risk_level="medium",
+                confidence=0.7,
+                reasons=["Rekabet yoğunluğu yüksek."],
+                recommended_actions=["Rekabet ortamını izleyin."],
+                needs_more_evidence=False,
+            ),
+            kwargs.get("intelligence"),
+            False,
+        )
+
+    monkeypatch.setattr(
+        "app.agents.a2a.pipeline.run_company_intelligence",
+        fake_intelligence,
+    )
+    monkeypatch.setattr(
+        "app.agents.a2a.pipeline.run_risk_assessment",
+        fake_risk,
+    )
+
+    result = await run_a2a_external_risk_pipeline(
+        tenant_id=uuid4(),
+        question="Spotify'ın dış risklerini araştır.",
+        response_language="tr",
+    )
+    assert "Risk seviyesi: orta" in result.answer
+    assert "Gerekçeler:" in result.answer
+    assert "Rekabet yoğunluğu yüksek." in result.answer
+    assert "Şirket: Spotify" in result.answer
+
+
+@pytest.mark.asyncio
 async def test_a2a_pipeline_unresolved_company(monkeypatch) -> None:
     result = await run_a2a_external_risk_pipeline(
         tenant_id=uuid4(),

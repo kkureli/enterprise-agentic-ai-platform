@@ -2,6 +2,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
+from app.agents.a2a_risk_node import a2a_risk_node
 from app.agents.approval_node import approval_node
 from app.agents.approved_action_node import approved_action_node
 from app.agents.mcp_tool_node import mcp_tool_node
@@ -29,15 +30,20 @@ def route_after_planner(state: AgentState) -> str | list[Send]:
         "knowledge": "rag",
         "sql": "sql",
         "tool": "tool",
+        "external_risk_assessment": "a2a_risk",
     }
 
     if not routes or routes == ["unsupported"] or routes[0] == "unsupported":
         return "fallback"
 
-    if len(routes) == 1:
-        return mapping[routes[0]]
+    executable = [route for route in routes if route in mapping]
+    if not executable:
+        return "fallback"
 
-    return [Send(mapping[route], state) for route in routes if route in mapping]
+    if len(executable) == 1:
+        return mapping[executable[0]]
+
+    return [Send(mapping[route], state) for route in executable]
 
 
 def after_capability(state: AgentState) -> str:
@@ -114,6 +120,12 @@ def finalize_node(state: AgentState) -> dict:
             **node_trace("finalize"),
         }
 
+    if route == "external_risk_assessment":
+        return {
+            "final_answer": state["a2a_answer"],
+            **node_trace("finalize"),
+        }
+
     raise ValueError(f"Unsupported finalize route: {route}")
 
 
@@ -136,6 +148,7 @@ def build_agent_graph():
     graph_builder.add_node("rag", rag_node)
     graph_builder.add_node("sql", sql_node)
     graph_builder.add_node("tool", mcp_tool_node)
+    graph_builder.add_node("a2a_risk", a2a_risk_node)
     graph_builder.add_node("synthesize", synthesis_node)
     graph_builder.add_node("write_gate", write_gate_node)
     graph_builder.add_node("finalize", finalize_node)
@@ -148,7 +161,7 @@ def build_agent_graph():
     graph_builder.add_conditional_edges(
         "planner",
         route_after_planner,
-        ["rag", "sql", "tool", "fallback"],
+        ["rag", "sql", "tool", "a2a_risk", "fallback"],
     )
 
     graph_builder.add_conditional_edges(
@@ -172,6 +185,14 @@ def build_agent_graph():
         route_after_tool,
         {
             "approval": "approval",
+            "synthesize": "synthesize",
+            "finalize": "finalize",
+        },
+    )
+    graph_builder.add_conditional_edges(
+        "a2a_risk",
+        after_capability,
+        {
             "synthesize": "synthesize",
             "finalize": "finalize",
         },

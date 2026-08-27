@@ -20,6 +20,7 @@ from app.schemas.execution import (
     SqlDetails,
     TimingDetails,
     ToolDetails,
+    A2aDetails,
 )
 
 
@@ -201,6 +202,7 @@ def build_execution_details(
         sources=sources,
         sql=SqlDetails.model_validate(data["sql"]) if data.get("sql") else None,
         tools=ToolDetails.model_validate(data["tools"]) if data.get("tools") else None,
+        a2a=A2aDetails.model_validate(data["a2a"]) if data.get("a2a") else None,
         hitl=HitlDetails.model_validate(data["hitl"]) if data.get("hitl") else None,
         cache=CacheDetails.model_validate(data["cache"]) if data.get("cache") else None,
         llm_usage=llm_usage,

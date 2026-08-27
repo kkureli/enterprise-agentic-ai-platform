@@ -17,7 +17,7 @@ final answer for the user.
 
 Rules:
 - Answer the original user question directly.
-- Use ONLY the provided evidence blocks (Knowledge/RAG, SQL, MCP).
+- Use ONLY the provided evidence blocks (Knowledge/RAG, SQL, MCP, A2A Risk).
 - Do not invent facts that are not supported by the evidence.
 - If a capability was selected but its evidence is missing or failed, say so
   briefly without inventing a substitute.
@@ -63,6 +63,10 @@ async def synthesis_node(state: AgentState) -> dict:
         )
     if "tool" in planned:
         sections.append(_block("MCP live tool evidence", state.get("tool_answer")))
+    if "external_risk_assessment" in planned:
+        sections.append(
+            _block("A2A external risk evidence", state.get("a2a_answer"))
+        )
 
     model = get_chat_model().with_structured_output(SynthesisOutput)
     result = await model.ainvoke(

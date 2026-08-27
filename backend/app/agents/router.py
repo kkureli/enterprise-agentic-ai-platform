@@ -10,7 +10,9 @@ from app.agents.execution_trace import node_trace
 from app.agents.state import AgentRoute, AgentState, ReadCapability
 from app.services.llm_service import get_chat_model
 
-READ_ROUTES: frozenset[str] = frozenset({"knowledge", "sql", "tool"})
+READ_ROUTES: frozenset[str] = frozenset(
+    {"knowledge", "sql", "tool", "external_risk_assessment"}
+)
 
 
 class RoutePlan(BaseModel):
@@ -71,7 +73,8 @@ Do NOT select every capability by default.
 
 Questions may be in English or Turkish. Route by intent, not by language.
 Turkish and English questions with the same meaning must select the same capabilities.
-Capability names and underlying systems remain English (knowledge/sql/tool).
+Capability names and underlying systems remain English
+(knowledge/sql/tool/external_risk_assessment).
 
 Valid capability routes:
 - knowledge: enterprise documents, policies, manuals, procedures, error-code meaning,
@@ -80,6 +83,9 @@ Valid capability routes:
   tickets) AND commercial account data (companies, revenue, transactions, payments,
   account health)
 - tool: live operational MCP tools (current asset status) and/or creating a maintenance ticket
+- external_risk_assessment: external/public company intelligence + risk assessment (A2A).
+  Use for outside risk, financing developments, public reputation/risk investigation —
+  NOT for internal revenue/SQL-only or internal contract/RAG-only questions.
 - unsupported: no available capability applies
 
 Rules:
@@ -96,6 +102,11 @@ Rules:
 7. Prefer sql for historical maintenance records and lists; prefer tool for
    CURRENT live operational status of a specific asset.
 8. Prefer knowledge for "what does X mean" / procedures / documentation.
+9. Prefer external_risk_assessment for external/public risk investigation.
+   If the user also needs internal structured data and/or contracts in the same
+   question, combine sql and/or knowledge WITH external_risk_assessment.
+10. Do NOT select external_risk_assessment for simple internal revenue, payment,
+    account-health SQL questions, or pure document lookup.
 
 Examples:
 
@@ -119,6 +130,18 @@ Examples:
 
 "What does the Spotify MSA say about termination?"
 → routes=["knowledge"], requires_synthesis=false, may_require_write=false
+
+"Assess Microsoft external risks."
+→ routes=["external_risk_assessment"], requires_synthesis=false, may_require_write=false
+
+"Spotify'ın dış risklerini araştır."
+→ routes=["external_risk_assessment"], requires_synthesis=false, may_require_write=false
+
+"Evaluate Spotify using internal data, contract terms, and current external risks."
+→ routes=["sql","knowledge","external_risk_assessment"], requires_synthesis=true, may_require_write=false
+
+"Spotify'ın iç verilerini, sözleşmesini ve güncel dış risklerini değerlendir."
+→ routes=["sql","knowledge","external_risk_assessment"], requires_synthesis=true, may_require_write=false
 
 "What is MACHINE-42's current status?"
 → routes=["tool"], requires_synthesis=false, may_require_write=false

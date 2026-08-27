@@ -1,4 +1,9 @@
-export type AgentRoute = 'knowledge' | 'sql' | 'tool' | 'unsupported'
+export type AgentRoute =
+  | 'knowledge'
+  | 'sql'
+  | 'tool'
+  | 'external_risk_assessment'
+  | 'unsupported'
 
 export type AgentStatus = 'completed' | 'approval_required'
 
