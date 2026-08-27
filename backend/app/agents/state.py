@@ -42,4 +42,9 @@ class AgentState(TypedDict, total=False):
     synthesis_answer: str
     final_answer: str
 
+    # Sprint 3 A2A structured evidence (dict payloads from Pydantic model_dump).
+    a2a_intelligence_evidence: dict[str, Any]
+    a2a_risk_result: dict[str, Any]
+    a2a_follow_up_task: dict[str, Any]
+
     execution_details: Annotated[dict[str, Any], merge_execution_details]

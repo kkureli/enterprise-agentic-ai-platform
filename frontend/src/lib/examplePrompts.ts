@@ -132,6 +132,16 @@ const PROMPTS_BY_TENANT: Record<string, ExamplePrompt[]> = {
       label: 'Spotify cirosu (TR)',
       prompt: "Spotify'ın cirosu nedir?",
     },
+    {
+      category: 'Composite / Synthesis',
+      label: 'Microsoft external risk (A2A)',
+      prompt: 'Assess Microsoft external and internal risks.',
+    },
+    {
+      category: 'Composite / Synthesis',
+      label: 'Spotify dış risk (TR A2A)',
+      prompt: "Spotify'ın dış risklerini araştır.",
+    },
   ],
 }
 
