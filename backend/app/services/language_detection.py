@@ -68,13 +68,66 @@ _TURKISH_WORDS = {
 
 _WORD_RE = re.compile(r"[A-Za-zÇĞİÖŞÜçğıöşü]+", re.UNICODE)
 
+# Explicit response-language overrides. Last match wins when both appear.
+_EXPLICIT_LANGUAGE_PATTERNS: list[tuple[re.Pattern[str], ResponseLanguage]] = [
+    (
+        re.compile(
+            r"(?:"
+            r"t[uü]rk(?:çe|ce)\s+cevap\s+ver(?:ir\s+misin)?"
+            r"|cevap(?:ı|i)?\s+t[uü]rk(?:çe|ce)\s+olsun"
+            r"|t[uü]rk(?:çe|ce)\s+yan[ıi]t\s+ver"
+            r"|yan[ıi]t[ıi]\s+t[uü]rk(?:çe|ce)\s+olsun"
+            r"|please\s+answer\s+in\s+turkish"
+            r"|answer\s+in\s+turkish"
+            r"|respond\s+in\s+turkish"
+            r"|in\s+turkish\s+please"
+            r"|reply\s+in\s+turkish"
+            r")"
+            ,
+            re.IGNORECASE,
+        ),
+        "tr",
+    ),
+    (
+        re.compile(
+            r"(?:"
+            r"ingilizce\s+cevap\s+ver(?:ir\s+misin)?"
+            r"|cevap(?:ı|i)?\s+ingilizce\s+olsun"
+            r"|ingilizce\s+yan[ıi]t\s+ver"
+            r"|please\s+answer\s+in\s+english"
+            r"|answer\s+in\s+english"
+            r"|respond\s+in\s+english"
+            r"|in\s+english\s+please"
+            r"|reply\s+in\s+english"
+            r")"
+            ,
+            re.IGNORECASE,
+        ),
+        "en",
+    ),
+]
 
-def detect_response_language(text: str) -> ResponseLanguage:
-    """Detect TR vs EN for agent responses.
 
-    Prefer Turkish when Turkish letters or enough Turkish cue words appear.
-    Default to English when uncertain so existing EN behavior stays stable.
+def detect_explicit_response_language(text: str) -> ResponseLanguage | None:
+    """Return an explicit TR/EN preference embedded in the query, if any.
+
+    When multiple preferences appear, the last match in the text wins.
     """
+    if not text or not text.strip():
+        return None
+
+    last_match: tuple[int, ResponseLanguage] | None = None
+    for pattern, language in _EXPLICIT_LANGUAGE_PATTERNS:
+        for match in pattern.finditer(text):
+            end = match.end()
+            if last_match is None or end >= last_match[0]:
+                last_match = (end, language)
+
+    return None if last_match is None else last_match[1]
+
+
+def detect_question_language(text: str) -> ResponseLanguage:
+    """Detect the language of the question itself (ignores explicit overrides)."""
     if not text or not text.strip():
         return "en"
 
@@ -86,6 +139,20 @@ def detect_response_language(text: str) -> ResponseLanguage:
         return "tr"
 
     return "en"
+
+
+def detect_response_language(text: str) -> ResponseLanguage:
+    """Resolve response language for agent answers.
+
+    Priority:
+    1. Explicit preference in the query ("Türkçe cevap ver", "answer in English")
+    2. Question-language heuristic
+    3. Default English
+    """
+    explicit = detect_explicit_response_language(text)
+    if explicit is not None:
+        return explicit
+    return detect_question_language(text)
 
 
 def format_response_language_instruction(language: str | None) -> str:

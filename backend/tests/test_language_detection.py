@@ -1,4 +1,6 @@
 from app.services.language_detection import (
+    detect_explicit_response_language,
+    detect_question_language,
     detect_response_language,
     format_response_language_instruction,
 )
@@ -25,3 +27,34 @@ def test_defaults_english_for_english_question() -> None:
 def test_defaults_english_when_uncertain() -> None:
     assert detect_response_language("Spotify") == "en"
     assert detect_response_language("") == "en"
+
+
+def test_explicit_turkish_override_on_english_question() -> None:
+    question = "What is Spotify revenue? Türkçe cevap ver"
+    assert detect_explicit_response_language(question) == "tr"
+    assert detect_question_language("What is Spotify revenue?") == "en"
+    assert detect_response_language(question) == "tr"
+    assert detect_response_language("What is Spotify's annual revenue? answer in Turkish") == "tr"
+    assert detect_response_language("Show Microsoft account health. Respond in Turkish.") == "tr"
+
+
+def test_explicit_english_override_on_turkish_question() -> None:
+    question = "Spotify'ın cirosu nedir? Answer in English"
+    assert detect_explicit_response_language(question) == "en"
+    assert detect_response_language(question) == "en"
+    assert detect_response_language("MACHINE-42 durumu nedir? İngilizce cevap ver") == "en"
+
+
+def test_last_explicit_preference_wins() -> None:
+    assert (
+        detect_response_language(
+            "What is Spotify revenue? answer in Turkish. Actually answer in English."
+        )
+        == "en"
+    )
+    assert (
+        detect_response_language(
+            "What is Spotify revenue? answer in English. Türkçe cevap ver"
+        )
+        == "tr"
+    )
