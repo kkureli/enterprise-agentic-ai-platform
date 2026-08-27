@@ -1,6 +1,6 @@
 """Idempotent seed for the public Enterprise Agentic AI Playground.
 
-Creates/reuses three demo tenants, operational data, and indexes tenant
+Creates/reuses demo tenants, operational/commercial data, and indexes tenant
 documents into Qdrant through the existing ingestion pipeline.
 
 Usage:
@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -23,6 +24,10 @@ from app.core.demo_tenants import DEMO_TENANTS, DemoTenantSpec
 from app.db.session import SessionLocal, close_db
 from app.models import (
     Asset,
+    Company,
+    CompanyPayment,
+    CompanyRevenue,
+    CompanyTransaction,
     Document,
     MaintenanceRecord,
     MaintenanceTicket,
@@ -602,10 +607,296 @@ async def seed_helios(session, tenant: Tenant) -> None:
     )
 
 
+async def get_or_create_company(
+    session,
+    *,
+    tenant_id: UUID,
+    internal_customer_id: str,
+    company_name: str,
+    official_name: str,
+    domain: str,
+    aliases: str,
+    industry: str,
+    country: str,
+    account_health: str,
+    health_score: int,
+    last_review_date: date,
+) -> Company:
+    result = await session.execute(
+        select(Company).where(
+            Company.tenant_id == tenant_id,
+            Company.internal_customer_id == internal_customer_id,
+        )
+    )
+    company = result.scalar_one_or_none()
+    if company is not None:
+        company.company_name = company_name
+        company.official_name = official_name
+        company.domain = domain
+        company.aliases = aliases
+        company.industry = industry
+        company.country = country
+        company.account_health = account_health
+        company.health_score = health_score
+        company.last_review_date = last_review_date
+        return company
+
+    company = Company(
+        tenant_id=tenant_id,
+        internal_customer_id=internal_customer_id,
+        company_name=company_name,
+        official_name=official_name,
+        domain=domain,
+        aliases=aliases,
+        industry=industry,
+        country=country,
+        account_health=account_health,
+        health_score=health_score,
+        last_review_date=last_review_date,
+    )
+    session.add(company)
+    await session.flush()
+    return company
+
+
+async def add_revenue_if_missing(
+    session,
+    *,
+    tenant_id: UUID,
+    company_id: UUID,
+    period_label: str,
+    fiscal_year: int,
+    amount: Decimal,
+    currency: str = "USD",
+    metric: str = "annual_revenue",
+) -> None:
+    result = await session.execute(
+        select(CompanyRevenue).where(
+            CompanyRevenue.tenant_id == tenant_id,
+            CompanyRevenue.company_id == company_id,
+            CompanyRevenue.period_label == period_label,
+            CompanyRevenue.metric == metric,
+        )
+    )
+    if result.scalar_one_or_none() is not None:
+        return
+    session.add(
+        CompanyRevenue(
+            tenant_id=tenant_id,
+            company_id=company_id,
+            period_label=period_label,
+            fiscal_year=fiscal_year,
+            currency=currency,
+            amount=amount,
+            metric=metric,
+        )
+    )
+
+
+async def add_transaction_if_missing(
+    session,
+    *,
+    tenant_id: UUID,
+    company_id: UUID,
+    reference: str,
+    txn_date: date,
+    amount: Decimal,
+    txn_type: str,
+    status: str,
+    currency: str = "USD",
+) -> None:
+    result = await session.execute(
+        select(CompanyTransaction).where(
+            CompanyTransaction.tenant_id == tenant_id,
+            CompanyTransaction.reference == reference,
+        )
+    )
+    if result.scalar_one_or_none() is not None:
+        return
+    session.add(
+        CompanyTransaction(
+            tenant_id=tenant_id,
+            company_id=company_id,
+            txn_date=txn_date,
+            amount=amount,
+            currency=currency,
+            txn_type=txn_type,
+            status=status,
+            reference=reference,
+        )
+    )
+
+
+async def add_payment_if_missing(
+    session,
+    *,
+    tenant_id: UUID,
+    company_id: UUID,
+    reference: str,
+    payment_date: date,
+    amount: Decimal,
+    method: str,
+    status: str,
+    currency: str = "USD",
+) -> None:
+    result = await session.execute(
+        select(CompanyPayment).where(
+            CompanyPayment.tenant_id == tenant_id,
+            CompanyPayment.reference == reference,
+        )
+    )
+    if result.scalar_one_or_none() is not None:
+        return
+    session.add(
+        CompanyPayment(
+            tenant_id=tenant_id,
+            company_id=company_id,
+            payment_date=payment_date,
+            amount=amount,
+            currency=currency,
+            method=method,
+            status=status,
+            reference=reference,
+        )
+    )
+
+
+async def seed_northstar(session, tenant: Tenant) -> None:
+    """Synthetic commercial portfolio for real public company entities."""
+
+    portfolio = [
+        {
+            "internal_customer_id": "CUST-SPOTIFY",
+            "company_name": "Spotify",
+            "official_name": "Spotify AB",
+            "domain": "spotify.com",
+            "aliases": "Spotify Inc,Spotify Technology",
+            "industry": "Streaming media",
+            "country": "Sweden",
+            "account_health": "healthy",
+            "health_score": 88,
+            "last_review_date": date(2025, 11, 12),
+            "revenue": Decimal("14500000.00"),
+            "txn_amount": Decimal("1250000.00"),
+            "payment_amount": Decimal("1250000.00"),
+            "payment_status": "completed",
+        },
+        {
+            "internal_customer_id": "CUST-SIEMENS",
+            "company_name": "Siemens",
+            "official_name": "Siemens AG",
+            "domain": "siemens.com",
+            "aliases": "Siemens AG,Siemens Industry",
+            "industry": "Industrial technology",
+            "country": "Germany",
+            "account_health": "watch",
+            "health_score": 68,
+            "last_review_date": date(2025, 10, 3),
+            "revenue": Decimal("9200000.00"),
+            "txn_amount": Decimal("980000.00"),
+            "payment_amount": Decimal("720000.00"),
+            "payment_status": "partial",
+        },
+        {
+            "internal_customer_id": "CUST-SHOPIFY",
+            "company_name": "Shopify",
+            "official_name": "Shopify Inc.",
+            "domain": "shopify.com",
+            "aliases": "Shopify Inc",
+            "industry": "E-commerce platform",
+            "country": "Canada",
+            "account_health": "healthy",
+            "health_score": 91,
+            "last_review_date": date(2025, 12, 1),
+            "revenue": Decimal("7800000.00"),
+            "txn_amount": Decimal("650000.00"),
+            "payment_amount": Decimal("650000.00"),
+            "payment_status": "completed",
+        },
+        {
+            "internal_customer_id": "CUST-ADOBE",
+            "company_name": "Adobe",
+            "official_name": "Adobe Inc.",
+            "domain": "adobe.com",
+            "aliases": "Adobe Systems,Adobe Inc",
+            "industry": "Creative software",
+            "country": "United States",
+            "account_health": "healthy",
+            "health_score": 84,
+            "last_review_date": date(2025, 9, 18),
+            "revenue": Decimal("11200000.00"),
+            "txn_amount": Decimal("900000.00"),
+            "payment_amount": Decimal("900000.00"),
+            "payment_status": "completed",
+        },
+        {
+            "internal_customer_id": "CUST-MICROSOFT",
+            "company_name": "Microsoft",
+            "official_name": "Microsoft Corporation",
+            "domain": "microsoft.com",
+            "aliases": "MSFT,Microsoft Corp",
+            "industry": "Enterprise software",
+            "country": "United States",
+            "account_health": "at_risk",
+            "health_score": 42,
+            "last_review_date": date(2025, 8, 22),
+            "revenue": Decimal("22100000.00"),
+            "txn_amount": Decimal("2100000.00"),
+            "payment_amount": Decimal("900000.00"),
+            "payment_status": "late",
+        },
+    ]
+
+    for item in portfolio:
+        company = await get_or_create_company(
+            session,
+            tenant_id=tenant.id,
+            internal_customer_id=item["internal_customer_id"],
+            company_name=item["company_name"],
+            official_name=item["official_name"],
+            domain=item["domain"],
+            aliases=item["aliases"],
+            industry=item["industry"],
+            country=item["country"],
+            account_health=item["account_health"],
+            health_score=item["health_score"],
+            last_review_date=item["last_review_date"],
+        )
+        await add_revenue_if_missing(
+            session,
+            tenant_id=tenant.id,
+            company_id=company.id,
+            period_label="2025",
+            fiscal_year=2025,
+            amount=item["revenue"],
+        )
+        await add_transaction_if_missing(
+            session,
+            tenant_id=tenant.id,
+            company_id=company.id,
+            reference=f"INV-{item['internal_customer_id']}-2025-01",
+            txn_date=date(2025, 1, 15),
+            amount=item["txn_amount"],
+            txn_type="invoice",
+            status="open" if item["payment_status"] != "completed" else "paid",
+        )
+        await add_payment_if_missing(
+            session,
+            tenant_id=tenant.id,
+            company_id=company.id,
+            reference=f"PAY-{item['internal_customer_id']}-2025-01",
+            payment_date=date(2025, 2, 10),
+            amount=item["payment_amount"],
+            method="wire",
+            status=item["payment_status"],
+        )
+
+
 SEEDERS = {
     "atlas-manufacturing": seed_atlas,
     "borealis-cold-chain": seed_borealis,
     "helios-energy-services": seed_helios,
+    "northstar-commercial": seed_northstar,
 }
 
 

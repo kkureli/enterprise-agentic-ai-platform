@@ -100,6 +100,60 @@ const PROMPTS_BY_TENANT: Record<string, ExamplePrompt[]> = {
         "What does WT-302 mean, review TURBINE-08's maintenance history and current operational status, then recommend the next action.",
     },
   ],
+  'Northstar Commercial': [
+    {
+      category: 'Structured Data / SQL',
+      label: 'Spotify revenue',
+      prompt: "What is Spotify's annual revenue?",
+    },
+    {
+      category: 'Structured Data / SQL',
+      label: 'Account health',
+      prompt: 'Which companies have account_health at_risk or watch?',
+    },
+    {
+      category: 'Knowledge / RAG',
+      label: 'Spotify MSA termination',
+      prompt: 'What does the Spotify MSA say about termination?',
+    },
+    {
+      category: 'Knowledge / RAG',
+      label: 'Microsoft account review',
+      prompt: 'Summarize the Microsoft account health review risks.',
+    },
+    {
+      category: 'Composite / Synthesis',
+      label: 'Spotify revenue + contract',
+      prompt:
+        "What is Spotify's annual revenue, and what does the Spotify MSA say about termination?",
+    },
+    {
+      category: 'Composite / Synthesis',
+      label: 'Microsoft external risk (A2A)',
+      prompt: 'Assess Microsoft external risks.',
+    },
+    {
+      category: 'Composite / Synthesis',
+      label: 'Microsoft risk HITL (TR)',
+      prompt: "Microsoft'un dış ve iç risklerini değerlendir.",
+    },
+    {
+      category: 'Composite / Synthesis',
+      label: 'Spotify dış risk (TR A2A)',
+      prompt: "Spotify'ın dış risklerini araştır.",
+    },
+    {
+      category: 'Composite / Synthesis',
+      label: 'Spotify SQL + RAG + A2A',
+      prompt:
+        'Evaluate Spotify using internal data, contract terms, and current external risks.',
+    },
+    {
+      category: 'Structured Data / SQL',
+      label: 'Spotify cirosu (TR)',
+      prompt: "Spotify'ın cirosu nedir?",
+    },
+  ],
 }
 
 export function getExamplePrompts(tenantName: string): ExamplePrompt[] {

@@ -14,6 +14,10 @@ ALLOWED_TABLES = {
     "assets",
     "maintenance_records",
     "maintenance_tickets",
+    "companies",
+    "company_revenue",
+    "transactions",
+    "payments",
 }
 
 

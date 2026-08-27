@@ -73,4 +73,20 @@ export const ORCHESTRATION_NODES: OrchestrationNode[] = [
     safety:
       'Allowlisted tools only. Approval is mandatory before any write executes. No autonomous side effects.',
   },
+  {
+    id: 'a2a-risk',
+    name: 'A2A External Risk',
+    shortLabel: 'A2A Risk',
+    purpose:
+      'Company Intelligence + Risk Agent pipeline: public evidence, internal SQL/RAG context, optional A2A follow-up hop.',
+    input: 'Commercial risk question + tenant company entities',
+    output:
+      'a2a_answer + structured risk; medium/high sets pending_action for create_github_issue',
+    whenUsed: 'Planner selects external_risk_assessment (Northstar commercial demos).',
+    performance:
+      'Multi-step LLM + Wikipedia/domain fetches; optional second intelligence hop when evidence is thin.',
+    tenantIsolation: 'Entity resolution and SQL evidence are tenant-scoped; refuse unresolved companies.',
+    safety:
+      'GitHub writes never run inside this node. Medium/high risk pauses at HITL before MCP create_github_issue.',
+  },
 ]

@@ -348,7 +348,7 @@ export default function App() {
       return (
         <EmptyBlock
           title="No demo tenants are available."
-          message="The public demo expects Atlas Manufacturing, Borealis Cold Chain, and Helios Energy Services."
+          message="The public demo expects Atlas Manufacturing, Borealis Cold Chain, Helios Energy Services, and Northstar Commercial."
         />
       )
     }

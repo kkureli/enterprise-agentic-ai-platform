@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.agents.execution_trace import node_trace
 from app.agents.state import AgentState
+from app.services.language_detection import format_response_language_instruction
 from app.services.llm_service import get_chat_model
 
 SYNTHESIS_SYSTEM_PROMPT = """
@@ -16,13 +17,16 @@ final answer for the user.
 
 Rules:
 - Answer the original user question directly.
-- Use ONLY the provided evidence blocks (Knowledge/RAG, SQL, MCP).
+- Use ONLY the provided evidence blocks (Knowledge/RAG, SQL, MCP, A2A Risk).
 - Do not invent facts that are not supported by the evidence.
 - If a capability was selected but its evidence is missing or failed, say so
   briefly without inventing a substitute.
 - Prefer concrete operational details from the evidence.
 - Do not reveal hidden chain-of-thought or planner internals.
 - Keep the answer concise and professional.
+- Write the entire final answer in the requested response language.
+  Evidence may be in English; translate the user-facing answer as needed
+  without changing facts or inventing details.
 """.strip()
 
 
@@ -44,6 +48,7 @@ async def synthesis_node(state: AgentState) -> dict:
     sections: list[str] = [
         f"Tenant slug: {state.get('tenant_slug') or 'unknown'}",
         f"Selected capabilities: {', '.join(planned) or 'none'}",
+        format_response_language_instruction(state.get("response_language")),
         f"User question:\n{state['query']}",
     ]
 
@@ -58,6 +63,8 @@ async def synthesis_node(state: AgentState) -> dict:
         )
     if "tool" in planned:
         sections.append(_block("MCP live tool evidence", state.get("tool_answer")))
+    if "external_risk_assessment" in planned:
+        sections.append(_block("A2A external risk evidence", state.get("a2a_answer")))
 
     model = get_chat_model().with_structured_output(SynthesisOutput)
     result = await model.ainvoke(

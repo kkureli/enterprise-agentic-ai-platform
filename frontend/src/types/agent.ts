@@ -1,4 +1,9 @@
-export type AgentRoute = 'knowledge' | 'sql' | 'tool' | 'unsupported'
+export type AgentRoute =
+  | 'knowledge'
+  | 'sql'
+  | 'tool'
+  | 'external_risk_assessment'
+  | 'unsupported'
 
 export type AgentStatus = 'completed' | 'approval_required'
 
@@ -6,7 +11,7 @@ export type RetrievalMode = 'standard' | 'advanced'
 
 export type PendingAction = {
   tool_name: string
-  arguments: Record<string, string>
+  arguments: Record<string, unknown>
 }
 
 export type RetrievalChunkDetail = {

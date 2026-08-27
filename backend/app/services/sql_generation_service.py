@@ -11,6 +11,10 @@ class GeneratedSQL(BaseModel):
 SYSTEM_PROMPT = """
 You generate PostgreSQL SELECT queries for an enterprise operations system.
 
+The user question may be in English or Turkish. Map intent to the English
+schema below. Never invent Turkish table or column names; always use the
+exact English identifiers listed here.
+
 Available tables:
 
 assets:
@@ -44,6 +48,57 @@ maintenance_tickets:
 - created_at
 - updated_at
 
+companies:
+- id
+- tenant_id
+- internal_customer_id
+- company_name
+- official_name
+- domain
+- aliases
+- industry
+- country
+- account_health
+- health_score
+- last_review_date
+- created_at
+- updated_at
+
+company_revenue:
+- id
+- tenant_id
+- company_id
+- period_label
+- fiscal_year
+- currency
+- amount
+- metric
+- created_at
+
+transactions:
+- id
+- tenant_id
+- company_id
+- txn_date
+- amount
+- currency
+- txn_type
+- status
+- reference
+- created_at
+
+payments:
+- id
+- tenant_id
+- company_id
+- payment_date
+- amount
+- currency
+- method
+- status
+- reference
+- created_at
+
 Rules:
 - Generate exactly one SELECT query.
 - Never generate INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, or TRUNCATE.
@@ -62,7 +117,20 @@ Rules:
 - Tenant predicates must appear in WHERE, not only in JOIN ON.
 - Never assume that tenant scope propagates through a JOIN.
 - Never use OR in the WHERE clause. Prefer AND and IN (...) instead.
-- Prefer simple alias names such as a, mr, mt.
+- Prefer simple alias names such as a, mr, mt, c, cr, t, p.
+- For company questions, resolve the entity with ONE equality on
+  companies.company_name (e.g. c.company_name = 'Microsoft').
+  Do NOT OR across company_name / official_name / domain / aliases.
+  Never invent a company row or mix up similarly named companies.
+- Turkish examples of intent mapping (still use English identifiers in SQL):
+  "uyarı" / "warning" → status or issue filters as appropriate
+  "bakım kaydı" / "geçmiş" → maintenance_records
+  "bilet" / "ticket" → maintenance_tickets
+  "varlık" / "makine" → assets / asset_code
+  "ciro" / "gelir" / "revenue" → company_revenue.amount
+  "müşteri" / "şirket" / "company" → companies
+  "ödeme" / "payment" → payments
+  "hesap sağlığı" / "account health" → companies.account_health
 
 Compliant join example:
 
@@ -81,6 +149,15 @@ JOIN assets AS a ON a.id = mt.asset_id
 WHERE a.tenant_id = :tenant_id
   AND mt.tenant_id = :tenant_id
   AND a.asset_code = 'MACHINE-42'
+
+Compliant company revenue example:
+
+SELECT c.company_name, c.internal_customer_id, cr.period_label, cr.amount, cr.currency
+FROM company_revenue AS cr
+JOIN companies AS c ON c.id = cr.company_id
+WHERE c.tenant_id = :tenant_id
+  AND cr.tenant_id = :tenant_id
+  AND c.company_name = 'Spotify'
 """.strip()
 
 
@@ -89,22 +166,26 @@ You repair a rejected PostgreSQL SELECT query so it passes enterprise SQL safety
 validation.
 
 You will receive:
-- the original user question
+- the original user question (English or Turkish)
 - the rejected SQL
 - the exact validation error
 - a checklist of required alias.tenant_id predicates derived from the rejected SQL
 
 Fix the SQL while preserving the user's intent.
+Always keep English table/column identifiers from the enterprise schema.
 
 Hard requirements:
 - Exactly one SELECT statement
-- Only tables: assets, maintenance_records, maintenance_tickets
+- Only tables: assets, maintenance_records, maintenance_tickets, companies,
+  company_revenue, transactions, payments
 - Every FROM/JOIN table alias must have alias.tenant_id = :tenant_id in WHERE
 - Use the alias form exactly (example: mr.tenant_id = :tenant_id).
   Do NOT use the bare table name when the table is aliased
   (maintenance_records.tenant_id is INVALID if the alias is mr).
 - Put every tenant predicate in the WHERE clause. JOIN ON alone is not enough.
 - Never use OR; rewrite with AND / IN (...)
+- For company entity filters, use a single c.company_name = '...' predicate
+  (do not OR official_name / domain / aliases)
 - Keep :tenant_id as the only tenant bind parameter
 - Do not invent tables or columns
 - Return only repaired SQL through structured output

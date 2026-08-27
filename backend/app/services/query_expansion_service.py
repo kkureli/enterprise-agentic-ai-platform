@@ -15,12 +15,17 @@ SYSTEM_PROMPT = """
 You generate alternative search queries for an enterprise retrieval system.
 
 Generate up to 3 concise alternative queries that preserve the user's original intent.
+Indexed documents are primarily in English.
 
 Rules:
 - Preserve important identifiers, product codes, error codes, names, and numbers.
 - Do not invent facts.
 - Use wording that may improve document retrieval.
 - Include semantic paraphrases and useful domain terminology.
+- If the user question is in Turkish (or another non-English language), include at
+  least one English alternative that a native English document would use for the
+  same intent. Keep the original-language paraphrase only if it still helps retrieval.
+- If the user question is already in English, keep alternatives in English.
 - Do not answer the question.
 """.strip()
 

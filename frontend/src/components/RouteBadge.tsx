@@ -4,6 +4,7 @@ const ROUTE_LABELS: Record<AgentRoute, string> = {
   knowledge: 'Knowledge',
   sql: 'Data',
   tool: 'Tool',
+  external_risk_assessment: 'External Risk',
   unsupported: 'Unsupported',
 }
 

@@ -110,6 +110,7 @@ async def test_rag_response_contains_sources_and_retrieved_chunks(
         limit,
         filters=None,
         retrieval_mode="standard",
+        response_language=None,
     ):
         return RagResult(
             answer="Employees receive 20 working days of paid annual leave.",

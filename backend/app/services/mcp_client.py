@@ -24,12 +24,28 @@ def get_mcp_server_dir() -> Path:
     return monorepo_mcp
 
 
+def _mcp_subprocess_env() -> dict[str, str]:
+    """Pass through host env so GitHub write tools can authenticate."""
+
+    import os
+
+    env = dict(os.environ)
+    if settings.github_token:
+        env["GITHUB_TOKEN"] = settings.github_token
+    if settings.github_repo:
+        env["GITHUB_REPO"] = settings.github_repo
+    if settings.github_api_base:
+        env["GITHUB_API_BASE"] = settings.github_api_base
+    return env
+
+
 @asynccontextmanager
 async def maintenance_mcp_session():
     server_params = StdioServerParameters(
         command="uv",
         args=["run", "python", "server.py"],
         cwd=str(get_mcp_server_dir()),
+        env=_mcp_subprocess_env(),
     )
 
     async with stdio_client(server_params) as (read, write):

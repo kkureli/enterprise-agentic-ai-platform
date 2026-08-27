@@ -14,15 +14,26 @@ async def approval_node(state: AgentState) -> dict:
     )
 
     approved = isinstance(decision, dict) and decision.get("approved") is True
+    tool_name = (state.get("pending_action") or {}).get("tool_name")
+    mcp_server = "github" if tool_name == "create_github_issue" else "maintenance"
 
     if not approved:
+        reject_message = (
+            "GitHub Issue açma isteği reddedildi; dış yazma yapılmadı."
+            if state.get("response_language") == "tr" and tool_name == "create_github_issue"
+            else (
+                "GitHub Issue creation was rejected; no external write was performed."
+                if tool_name == "create_github_issue"
+                else "The action was rejected by the user."
+            )
+        )
         return {
             "requires_approval": False,
             "approval_granted": False,
-            "tool_answer": "The action was rejected by the user.",
+            "tool_answer": reject_message,
             **node_trace(
                 "approval",
-                route="tool",
+                route="tool" if tool_name != "create_github_issue" else "external_risk_assessment",
                 hitl={
                     "required": True,
                     "approved": False,
@@ -31,10 +42,10 @@ async def approval_node(state: AgentState) -> dict:
                 tools={
                     "approval_status": "rejected",
                     "requires_approval": True,
-                    "tool_name": (state.get("pending_action") or {}).get("tool_name"),
+                    "tool_name": tool_name,
                     "arguments": (state.get("pending_action") or {}).get("arguments"),
                     "tool_type": "write",
-                    "mcp_server": "maintenance",
+                    "mcp_server": mcp_server,
                 },
             ),
         }
@@ -44,7 +55,7 @@ async def approval_node(state: AgentState) -> dict:
         "approval_granted": True,
         **node_trace(
             "approval",
-            route="tool",
+            route="tool" if tool_name != "create_github_issue" else "external_risk_assessment",
             hitl={
                 "required": True,
                 "approved": True,
@@ -53,10 +64,10 @@ async def approval_node(state: AgentState) -> dict:
             tools={
                 "approval_status": "approved",
                 "requires_approval": True,
-                "tool_name": (state.get("pending_action") or {}).get("tool_name"),
+                "tool_name": tool_name,
                 "arguments": (state.get("pending_action") or {}).get("arguments"),
                 "tool_type": "write",
-                "mcp_server": "maintenance",
+                "mcp_server": mcp_server,
             },
         ),
     }

@@ -1,5 +1,7 @@
 from mcp.server import MCPServer
 from pydantic import BaseModel
+import os
+import httpx
 
 
 class AssetStatus(BaseModel):
@@ -28,6 +30,17 @@ class MaintenanceTicket(BaseModel):
     issue: str
     priority: str
     status: str
+
+
+class GitHubIssueResult(BaseModel):
+    number: int
+    id: str
+    title: str
+    html_url: str
+    state: str
+    repository: str
+    tenant_slug: str
+    dedupe_key: str | None = None
 
 
 # Demo MCP data is explicitly keyed by tenant slug so reads cannot cross tenants.
@@ -136,13 +149,31 @@ TENANT_HISTORIES: dict[str, dict[str, MaintenanceHistory]] = {
 mcp = MCPServer("Enterprise Maintenance Tools")
 
 READ_TOOLS = frozenset({"get_asset_status", "get_maintenance_history"})
-WRITE_TOOLS = frozenset({"create_maintenance_ticket"})
+WRITE_TOOLS = frozenset({"create_maintenance_ticket", "create_github_issue"})
 
 
 def _require_tenant_slug(tenant_slug: str | None) -> str:
     if not tenant_slug or not str(tenant_slug).strip():
         raise ValueError("tenant_slug is required for tenant-scoped MCP tools.")
     return str(tenant_slug).strip()
+
+
+def _github_config() -> tuple[str, str, str]:
+    token = (os.environ.get("GITHUB_TOKEN") or "").strip()
+    if not token:
+        raise RuntimeError(
+            "GITHUB_TOKEN is not configured. Set a fine-grained or classic PAT "
+            "with Issues write access for the target repository."
+        )
+    repo = (
+        os.environ.get("GITHUB_REPO") or "kkureli/enterprise-agentic-ai-platform"
+    ).strip()
+    if "/" not in repo:
+        raise RuntimeError("GITHUB_REPO must be in 'owner/name' form.")
+    api_base = (
+        os.environ.get("GITHUB_API_BASE") or "https://api.github.com"
+    ).rstrip("/")
+    return token, repo, api_base
 
 
 @mcp.tool()
@@ -162,6 +193,71 @@ def create_maintenance_ticket(
     _require_tenant_slug(tenant_slug)
     raise RuntimeError(
         "This write action must be executed through the approved HITL workflow."
+    )
+
+
+@mcp.tool()
+def create_github_issue(
+    title: str,
+    body: str,
+    tenant_slug: str | None = None,
+    labels: list[str] | None = None,
+    dedupe_key: str | None = None,
+) -> GitHubIssueResult:
+    """
+    Create a real GitHub Issue in the configured project repository.
+
+    Host must call this only after HITL approval. Uses GITHUB_TOKEN /
+    GITHUB_REPO from the MCP process environment. Issue body may include an
+    HTML comment marker for host-side dedupe correlation.
+    """
+
+    slug = _require_tenant_slug(tenant_slug)
+    cleaned_title = (title or "").strip()
+    cleaned_body = (body or "").strip()
+    if not cleaned_title:
+        raise ValueError("title is required")
+    if not cleaned_body:
+        raise ValueError("body is required")
+
+    token, repo, api_base = _github_config()
+    marker = ""
+    if dedupe_key and dedupe_key.strip():
+        marker = f"\n\n<!-- agent-dedupe:{dedupe_key.strip()} -->\n"
+
+    payload: dict = {
+        "title": cleaned_title[:240],
+        "body": cleaned_body + marker,
+    }
+    if labels:
+        payload["labels"] = [str(label).strip() for label in labels if str(label).strip()]
+
+    url = f"{api_base}/repos/{repo}/issues"
+    response = httpx.post(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "enterprise-agentic-ai-platform-mcp",
+        },
+        json=payload,
+        timeout=30.0,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f"GitHub issue create failed ({response.status_code}): {response.text[:500]}"
+        )
+    data = response.json()
+    return GitHubIssueResult(
+        number=int(data["number"]),
+        id=str(data["id"]),
+        title=str(data.get("title") or cleaned_title),
+        html_url=str(data["html_url"]),
+        state=str(data.get("state") or "open"),
+        repository=repo,
+        tenant_slug=slug,
+        dedupe_key=(dedupe_key.strip() if dedupe_key else None),
     )
 
 

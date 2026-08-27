@@ -1,0 +1,17 @@
+Microsoft Account Health Review — Synthetic Demo
+Internal customer ID: CUST-MICROSOFT
+Official name: Microsoft Corporation
+Domain: microsoft.com
+
+Account health: at_risk
+Health score: 42
+
+Findings:
+- Two consecutive late payments above contractual thresholds
+- Escalation opened for service credit calculation dispute
+- Executive sponsor engagement dropped in the last quarter
+
+Mitigation plan:
+1. Freeze non-critical expansions until payment posture recovers
+2. Re-baseline invoice schedule and reconciliation process
+3. Require weekly finance sync until account_health returns to watch or healthy

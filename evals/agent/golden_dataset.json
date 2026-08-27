@@ -215,5 +215,112 @@
     "expected_approval": false,
     "tenant_slug": "atlas-manufacturing",
     "notes": "Same question shape as Borealis must not leak cold-chain meanings when evaluated per-tenant."
+  },
+
+  {
+    "id": "knowledge_tr_01",
+    "question": "AX-4317 hata kodu ne anlama geliyor?",
+    "expected_route": "knowledge",
+    "expected_approval": false
+  },
+  {
+    "id": "sql_tr_01",
+    "question": "MACHINE-42 için kaç bakım kaydı var?",
+    "expected_route": "sql",
+    "expected_approval": false
+  },
+  {
+    "id": "tool_tr_01",
+    "question": "MACHINE-42'nin güncel operasyonel durumu nedir?",
+    "expected_route": "tool",
+    "expected_approval": false
+  },
+  {
+    "id": "tool_tr_write_01",
+    "question": "MACHINE-42 için hidrolik basınç kaybı nedeniyle yüksek öncelikli bakım kaydı oluştur.",
+    "expected_route": "tool",
+    "expected_approval": true
+  },
+  {
+    "id": "unsupported_tr_01",
+    "question": "Bakım müdürüne e-posta gönder.",
+    "expected_route": "unsupported",
+    "expected_approval": false
+  },
+  {
+    "id": "composite_rag_mcp_tr_01",
+    "question": "E-100 ne demek ve MACHINE-42'nin güncel operasyonel durumu nedir?",
+    "expected_route": "knowledge",
+    "expected_routes": ["knowledge", "tool"],
+    "expected_approval": false,
+    "required_facts": ["E-100", "MACHINE-42"]
+  },
+
+  {
+    "id": "sql_company_01",
+    "question": "What is Spotify's annual revenue?",
+    "expected_route": "sql",
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Spotify"]
+  },
+  {
+    "id": "sql_company_tr_01",
+    "question": "Spotify'ın cirosu nedir?",
+    "expected_route": "sql",
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Spotify"]
+  },
+  {
+    "id": "knowledge_company_01",
+    "question": "What does the Spotify MSA say about termination?",
+    "expected_route": "knowledge",
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Spotify", "termination"]
+  },
+  {
+    "id": "composite_company_01",
+    "question": "What is Spotify's annual revenue, and what does the Spotify MSA say about termination?",
+    "expected_route": "knowledge",
+    "expected_routes": ["knowledge", "sql"],
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Spotify"]
+  },
+  {
+    "id": "a2a_external_risk_01",
+    "question": "Assess Microsoft external risks.",
+    "expected_route": "external_risk_assessment",
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Microsoft"]
+  },
+  {
+    "id": "a2a_external_risk_tr_01",
+    "question": "Spotify'ın dış risklerini araştır.",
+    "expected_route": "external_risk_assessment",
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Spotify"]
+  },
+  {
+    "id": "composite_a2a_company_01",
+    "question": "Evaluate Spotify using internal data, contract terms, and current external risks.",
+    "expected_route": "sql",
+    "expected_routes": ["sql", "knowledge", "external_risk_assessment"],
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Spotify"]
+  },
+  {
+    "id": "composite_a2a_company_tr_01",
+    "question": "Spotify'ın iç verilerini, sözleşmesini ve güncel dış risklerini değerlendir.",
+    "expected_route": "sql",
+    "expected_routes": ["sql", "knowledge", "external_risk_assessment"],
+    "expected_approval": false,
+    "tenant_slug": "northstar-commercial",
+    "required_facts": ["Spotify"]
   }
 ]

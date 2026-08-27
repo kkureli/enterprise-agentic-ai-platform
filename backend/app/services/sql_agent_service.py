@@ -7,6 +7,10 @@ from uuid import UUID
 from pydantic import BaseModel
 from sqlglot import exp, parse
 
+from app.services.language_detection import (
+    detect_response_language,
+    format_response_language_instruction,
+)
 from app.services.llm_service import get_chat_model
 from app.services.sql_generation_service import generate_sql, repair_sql
 from app.services.sql_query_service import (
@@ -34,7 +38,7 @@ class SQLAgentResult(BaseModel):
 
 
 SYSTEM_PROMPT = """
-You answer questions about enterprise operational data.
+You answer questions about enterprise operational and commercial account data.
 
 You are given:
 - the user's original question
@@ -47,6 +51,11 @@ Rules:
 - If no rows were returned, clearly say that no matching data was found.
 - Be concise and clear.
 - Do not expose the SQL query unless the user explicitly asks for it.
+- Write the entire answer in the requested response language.
+  SQL identifiers and raw row values may stay as returned; translate the
+  user-facing explanation as needed without changing facts.
+- For company questions, keep entity identity exact (company_name, domain,
+  internal_customer_id). Never blend facts across different companies.
 """.strip()
 
 
@@ -71,17 +80,23 @@ async def _generate_and_validate_sql(question: str) -> tuple[str, bool, float]:
 
     try:
         validate_readonly_sql(sql)
-    except UnsafeSQLQueryError as exc:
+    except UnsafeSQLQueryError as first_error:
         logger.info(
             "SQL validation failed; attempting one bounded repair. error=%s sql=%s",
-            exc,
+            first_error,
             sql,
         )
         rejected = sql
-        sql = await repair_sql(question, rejected, str(exc))
+        sql = await repair_sql(question, rejected, str(first_error))
         repaired = True
-        # Second validation must pass; never execute rejected SQL.
-        validate_readonly_sql(sql)
+        try:
+            # Second validation must pass; never execute rejected SQL.
+            validate_readonly_sql(sql)
+        except UnsafeSQLQueryError as second_error:
+            generation_duration_ms = round((time.perf_counter() - generation_started) * 1000, 2)
+            raise UnsafeSQLQueryError(
+                f"SQL remained unsafe after one repair attempt: {second_error}"
+            ) from second_error
 
     generation_duration_ms = round((time.perf_counter() - generation_started) * 1000, 2)
     return sql, repaired, generation_duration_ms
@@ -90,8 +105,36 @@ async def _generate_and_validate_sql(question: str) -> tuple[str, bool, float]:
 async def answer_with_sql(
     tenant_id: UUID,
     question: str,
+    response_language: str | None = None,
 ) -> SQLAgentResult:
-    sql, repaired, generation_duration_ms = await _generate_and_validate_sql(question)
+    language = response_language or detect_response_language(question)
+    try:
+        sql, repaired, generation_duration_ms = await _generate_and_validate_sql(question)
+    except UnsafeSQLQueryError as exc:
+        logger.warning("SQL capability soft-failed after validation/repair: %s", exc)
+        soft_answer = (
+            "Yapılandırılmış SQL sorgusu güvenlik kuralları nedeniyle çalıştırılamadı; "
+            "diğer kanıt kaynaklarıyla devam ediliyor."
+            if language == "tr"
+            else (
+                "Structured SQL could not be executed under safety rules; "
+                "continuing with other evidence sources."
+            )
+        )
+        return SQLAgentResult(
+            sql="",
+            rows=[],
+            answer=soft_answer,
+            validation_status="failed",
+            tables_used=[],
+            tenant_scope_verified=False,
+            read_only_verified=False,
+            row_count=0,
+            generation_duration_ms=None,
+            execution_duration_ms=None,
+            llm_generation_ms=None,
+            repaired=False,
+        )
 
     validation_status = "passed"
     tenant_scope_verified = True
@@ -123,6 +166,8 @@ async def answer_with_sql(
             (
                 "human",
                 f"""
+{format_response_language_instruction(language)}
+
 User question:
 {question}
 

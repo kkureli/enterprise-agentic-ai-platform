@@ -13,8 +13,41 @@ from app.agents.graph import (
     route_after_planner,
     route_after_tool,
 )
-from app.agents.router import RoutePlan, finalize_plan, normalize_planned_routes
+from app.agents.router import (
+    PLANNER_SYSTEM_PROMPT,
+    RoutePlan,
+    finalize_plan,
+    normalize_planned_routes,
+)
 from app.services.mcp_client import call_maintenance_tool
+
+
+def test_planner_prompt_supports_turkish_and_english_intent():
+    assert "English or Turkish" in PLANNER_SYSTEM_PROMPT
+    assert "E-100 ne anlama geliyor?" in PLANNER_SYSTEM_PROMPT
+    assert "Hangi varlıklarda uyarı var?" in PLANNER_SYSTEM_PROMPT
+
+
+def test_planner_prompt_includes_external_risk_assessment():
+    assert "external_risk_assessment" in PLANNER_SYSTEM_PROMPT
+    assert "Spotify'ın dış risklerini araştır." in PLANNER_SYSTEM_PROMPT
+    assert "Assess Microsoft external risks." in PLANNER_SYSTEM_PROMPT
+
+
+def test_normalize_keeps_external_risk_assessment():
+    assert normalize_planned_routes(["external_risk_assessment"]) == ["external_risk_assessment"]
+    assert normalize_planned_routes(["sql", "knowledge", "external_risk_assessment"]) == [
+        "sql",
+        "knowledge",
+        "external_risk_assessment",
+    ]
+    plan = finalize_plan(
+        RoutePlan(
+            routes=["sql", "knowledge", "external_risk_assessment"],
+            requires_synthesis=False,
+        )
+    )
+    assert plan.requires_synthesis is True
 
 
 def test_normalize_planned_routes_dedupes_and_drops_unsupported_mix():
@@ -51,6 +84,28 @@ def test_route_after_planner_single_fast_path():
         )
         == "fallback"
     )
+    assert (
+        route_after_planner(
+            {
+                "planned_routes": ["external_risk_assessment"],
+            }
+        )
+        == "a2a_risk"
+    )
+
+
+def test_route_after_planner_fanout_includes_a2a_risk():
+    sends = route_after_planner(
+        {
+            "planned_routes": ["sql", "knowledge", "external_risk_assessment"],
+            "requires_synthesis": True,
+            "query": "composite",
+            "tenant_id": uuid4(),
+            "tenant_slug": "northstar-commercial",
+        }
+    )
+    assert isinstance(sends, list)
+    assert [send.node for send in sends] == ["sql", "rag", "a2a_risk"]
 
 
 def test_route_after_planner_fanout_sends():
@@ -290,6 +345,67 @@ async def test_single_route_skips_synthesis(monkeypatch):
     assert called["synthesis"] == 0
     assert result["final_answer"] == "AX-4317 indicates hydraulic pressure loss."
     assert "synthesize" not in result["execution_details"]["graph_path"]
+
+
+@pytest.mark.asyncio
+async def test_external_risk_route_runs_a2a_node(monkeypatch):
+    async def fake_planner(state):
+        return {
+            "route": "external_risk_assessment",
+            "planned_routes": ["external_risk_assessment"],
+            "requires_synthesis": False,
+            "may_require_write": False,
+            "tool_read_only": False,
+            "execution_details": {
+                "graph_path": ["planner"],
+                "selected_capabilities": ["external_risk_assessment"],
+                "route": "external_risk_assessment",
+            },
+        }
+
+    async def fake_a2a(state):
+        return {
+            "a2a_answer": "Risk level: medium\nConfidence: 0.70",
+            "a2a_risk_result": {"risk_level": "medium", "confidence": 0.7},
+            "execution_details": {
+                "graph_path": ["a2a_risk"],
+                "route": "external_risk_assessment",
+                "a2a": {
+                    "company_query": "Microsoft",
+                    "follow_up_used": False,
+                    "risk_level": "medium",
+                    "confidence": 0.7,
+                },
+            },
+        }
+
+    called = {"synthesis": 0}
+
+    async def fake_synthesis(state):
+        called["synthesis"] += 1
+        return {"synthesis_answer": "should not run"}
+
+    from app.agents import graph as graph_module
+
+    monkeypatch.setattr(graph_module, "planner_node", fake_planner)
+    monkeypatch.setattr(graph_module, "a2a_risk_node", fake_a2a)
+    monkeypatch.setattr(graph_module, "synthesis_node", fake_synthesis)
+
+    compiled = graph_module.build_agent_graph().compile(checkpointer=InMemorySaver())
+    result = await compiled.ainvoke(
+        {
+            "tenant_id": uuid4(),
+            "tenant_slug": "northstar-commercial",
+            "query": "Assess Microsoft external risks.",
+            "retrieval_mode": "standard",
+            "response_language": "en",
+        },
+        config={"configurable": {"thread_id": str(uuid4())}},
+    )
+    assert called["synthesis"] == 0
+    assert result["final_answer"].startswith("Risk level: medium")
+    assert "a2a_risk" in result["execution_details"]["graph_path"]
+    assert result["execution_details"]["a2a"]["company_query"] == "Microsoft"
 
 
 @pytest.mark.asyncio

@@ -10,7 +10,7 @@ from app.agents.execution_trace import node_trace
 from app.agents.state import AgentRoute, AgentState, ReadCapability
 from app.services.llm_service import get_chat_model
 
-READ_ROUTES: frozenset[str] = frozenset({"knowledge", "sql", "tool"})
+READ_ROUTES: frozenset[str] = frozenset({"knowledge", "sql", "tool", "external_risk_assessment"})
 
 
 class RoutePlan(BaseModel):
@@ -69,10 +69,21 @@ You are a selective planner for an enterprise AI operations platform.
 Select the minimum set of capabilities required to answer the user question.
 Do NOT select every capability by default.
 
+Questions may be in English or Turkish. Route by intent, not by language.
+Turkish and English questions with the same meaning must select the same capabilities.
+Capability names and underlying systems remain English
+(knowledge/sql/tool/external_risk_assessment).
+
 Valid capability routes:
-- knowledge: enterprise documents, policies, manuals, procedures, error-code meaning
-- sql: historical / structured operational data in PostgreSQL (counts, lists, history, tickets)
+- knowledge: enterprise documents, policies, manuals, procedures, error-code meaning,
+  contracts, customer notes, account reviews
+- sql: historical / structured operational data in PostgreSQL (counts, lists, history,
+  tickets) AND commercial account data (companies, revenue, transactions, payments,
+  account health)
 - tool: live operational MCP tools (current asset status) and/or creating a maintenance ticket
+- external_risk_assessment: external/public company intelligence + risk assessment (A2A).
+  Use for outside risk, financing developments, public reputation/risk investigation —
+  NOT for internal revenue/SQL-only or internal contract/RAG-only questions.
 - unsupported: no available capability applies
 
 Rules:
@@ -89,19 +100,59 @@ Rules:
 7. Prefer sql for historical maintenance records and lists; prefer tool for
    CURRENT live operational status of a specific asset.
 8. Prefer knowledge for "what does X mean" / procedures / documentation.
+9. Prefer external_risk_assessment for external/public risk investigation.
+   If the user also needs internal structured data and/or contracts in the same
+   question, combine sql and/or knowledge WITH external_risk_assessment.
+10. Do NOT select external_risk_assessment for simple internal revenue, payment,
+    account-health SQL questions, or pure document lookup.
 
 Examples:
 
 "What does E-100 mean?"
 → routes=["knowledge"], requires_synthesis=false, may_require_write=false
 
+"E-100 ne anlama geliyor?"
+→ routes=["knowledge"], requires_synthesis=false, may_require_write=false
+
 "Which assets have warnings?"
 → routes=["sql"], requires_synthesis=false, may_require_write=false
+
+"Hangi varlıklarda uyarı var?"
+→ routes=["sql"], requires_synthesis=false, may_require_write=false
+
+"What is Spotify's annual revenue?"
+→ routes=["sql"], requires_synthesis=false, may_require_write=false
+
+"Spotify'ın cirosu nedir?"
+→ routes=["sql"], requires_synthesis=false, may_require_write=false
+
+"What does the Spotify MSA say about termination?"
+→ routes=["knowledge"], requires_synthesis=false, may_require_write=false
+
+"Assess Microsoft external risks."
+→ routes=["external_risk_assessment"], requires_synthesis=false, may_require_write=false
+
+"Spotify'ın dış risklerini araştır."
+→ routes=["external_risk_assessment"], requires_synthesis=false, may_require_write=false
+
+"Evaluate Spotify using internal data, contract terms, and current external risks."
+→ routes=["sql","knowledge","external_risk_assessment"], requires_synthesis=true,
+  may_require_write=false
+
+"Spotify'ın iç verilerini, sözleşmesini ve güncel dış risklerini değerlendir."
+→ routes=["sql","knowledge","external_risk_assessment"], requires_synthesis=true,
+  may_require_write=false
 
 "What is MACHINE-42's current status?"
 → routes=["tool"], requires_synthesis=false, may_require_write=false
 
+"MACHINE-42'nin güncel durumu nedir?"
+→ routes=["tool"], requires_synthesis=false, may_require_write=false
+
 "Create a high-priority maintenance ticket for MACHINE-42 because of hydraulic pressure loss."
+→ routes=["tool"], requires_synthesis=false, may_require_write=true
+
+"MACHINE-42 için hidrolik basınç kaybı nedeniyle yüksek öncelikli bakım kaydı oluştur."
 → routes=["tool"], requires_synthesis=false, may_require_write=true
 
 "Use the enterprise system to create a ticket for MACHINE-42."
@@ -110,10 +161,16 @@ Examples:
 "What does E-100 mean and what is MACHINE-42's status?"
 → routes=["knowledge","tool"], requires_synthesis=true, may_require_write=false
 
+"E-100 ne demek ve MACHINE-42'nin durumu nedir?"
+→ routes=["knowledge","tool"], requires_synthesis=true, may_require_write=false
+
 "What does E-100 mean and MACHINE-42 history + current status?"
 → routes=["knowledge","sql","tool"], requires_synthesis=true, may_require_write=false
 
 "Send an email to the maintenance manager."
+→ routes=["unsupported"], requires_synthesis=false, may_require_write=false
+
+"Bakım müdürüne e-posta gönder."
 → routes=["unsupported"], requires_synthesis=false, may_require_write=false
 
 Return only the structured plan.

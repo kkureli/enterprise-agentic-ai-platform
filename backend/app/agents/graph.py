@@ -2,6 +2,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
+from app.agents.a2a_risk_node import a2a_risk_node
 from app.agents.approval_node import approval_node
 from app.agents.approved_action_node import approved_action_node
 from app.agents.mcp_tool_node import mcp_tool_node
@@ -29,20 +30,36 @@ def route_after_planner(state: AgentState) -> str | list[Send]:
         "knowledge": "rag",
         "sql": "sql",
         "tool": "tool",
+        "external_risk_assessment": "a2a_risk",
     }
 
     if not routes or routes == ["unsupported"] or routes[0] == "unsupported":
         return "fallback"
 
-    if len(routes) == 1:
-        return mapping[routes[0]]
+    executable = [route for route in routes if route in mapping]
+    if not executable:
+        return "fallback"
 
-    return [Send(mapping[route], state) for route in routes if route in mapping]
+    if len(executable) == 1:
+        return mapping[executable[0]]
+
+    return [Send(mapping[route], state) for route in executable]
 
 
 def after_capability(state: AgentState) -> str:
     if state.get("requires_synthesis"):
         return "synthesize"
+    return "finalize"
+
+
+def route_after_a2a(state: AgentState) -> str:
+    """A2A may request HITL for high-risk GitHub escalation."""
+
+    # Composite paths synthesize first; HITL runs after (see after_synthesize).
+    if state.get("requires_synthesis"):
+        return "synthesize"
+    if state.get("requires_approval"):
+        return "approval"
     return "finalize"
 
 
@@ -61,6 +78,9 @@ def route_after_approval(state: AgentState) -> str:
 
 
 def after_synthesize(state: AgentState) -> str:
+    # High-risk A2A may set requires_approval while also synthesizing.
+    if state.get("requires_approval"):
+        return "approval"
     if state.get("may_require_write"):
         return "write_gate"
     return "finalize"
@@ -75,16 +95,30 @@ def after_write_gate(state: AgentState) -> str:
 def finalize_node(state: AgentState) -> dict:
     from app.agents.execution_trace import node_trace
 
+    a2a_answer = (state.get("a2a_answer") or "").strip()
+
     # Explicit reject/approve outcomes from HITL take precedence over synthesis.
     if state.get("approval_granted") is False and state.get("tool_answer"):
+        reject_note = state["tool_answer"]
+        if a2a_answer:
+            return {
+                "final_answer": f"{a2a_answer}\n\n{reject_note}",
+                **node_trace("finalize"),
+            }
         return {
-            "final_answer": state["tool_answer"],
+            "final_answer": reject_note,
             **node_trace("finalize"),
         }
 
     if state.get("action_result") and state.get("tool_answer"):
+        action_note = state["tool_answer"]
+        if a2a_answer:
+            return {
+                "final_answer": f"{a2a_answer}\n\n{action_note}",
+                **node_trace("finalize"),
+            }
         return {
-            "final_answer": state["tool_answer"],
+            "final_answer": action_note,
             **node_trace("finalize"),
         }
 
@@ -114,6 +148,18 @@ def finalize_node(state: AgentState) -> dict:
             **node_trace("finalize"),
         }
 
+    if route == "external_risk_assessment":
+        # Waiting for HITL: surface assessment + approval message.
+        if state.get("requires_approval") and state.get("tool_answer") and a2a_answer:
+            return {
+                "final_answer": f"{a2a_answer}\n\n{state['tool_answer']}",
+                **node_trace("finalize"),
+            }
+        return {
+            "final_answer": state["a2a_answer"],
+            **node_trace("finalize"),
+        }
+
     raise ValueError(f"Unsupported finalize route: {route}")
 
 
@@ -136,6 +182,7 @@ def build_agent_graph():
     graph_builder.add_node("rag", rag_node)
     graph_builder.add_node("sql", sql_node)
     graph_builder.add_node("tool", mcp_tool_node)
+    graph_builder.add_node("a2a_risk", a2a_risk_node)
     graph_builder.add_node("synthesize", synthesis_node)
     graph_builder.add_node("write_gate", write_gate_node)
     graph_builder.add_node("finalize", finalize_node)
@@ -148,7 +195,7 @@ def build_agent_graph():
     graph_builder.add_conditional_edges(
         "planner",
         route_after_planner,
-        ["rag", "sql", "tool", "fallback"],
+        ["rag", "sql", "tool", "a2a_risk", "fallback"],
     )
 
     graph_builder.add_conditional_edges(
@@ -170,6 +217,15 @@ def build_agent_graph():
     graph_builder.add_conditional_edges(
         "tool",
         route_after_tool,
+        {
+            "approval": "approval",
+            "synthesize": "synthesize",
+            "finalize": "finalize",
+        },
+    )
+    graph_builder.add_conditional_edges(
+        "a2a_risk",
+        route_after_a2a,
         {
             "approval": "approval",
             "synthesize": "synthesize",

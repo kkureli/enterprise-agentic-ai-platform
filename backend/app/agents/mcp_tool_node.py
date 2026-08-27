@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.agents.execution_trace import node_trace, safe_result_preview
 from app.agents.state import AgentState
+from app.services.language_detection import format_response_language_instruction
 from app.services.llm_service import get_chat_model
 from app.services.mcp_client import (
     call_maintenance_tool,
@@ -27,7 +28,11 @@ MCP_SERVER_NAME = "maintenance"
 WRITE_INTENT_RE = re.compile(
     r"\b(create|open|request|file|raise)\b.*\b(ticket|maintenance ticket)\b"
     r"|\b(ticket)\b.*\b(create|open)\b"
-    r"|\buse the enterprise system to create\b",
+    r"|\buse the enterprise system to create\b"
+    r"|\b(oluştur|olustur|aç|ac)\b.*\b(bilet|ticket|bakım kaydı|bakim kaydi|"
+    r"bakım bileti|bakim bileti)\b"
+    r"|\b(bilet|ticket|bakım kaydı|bakim kaydi)\b.*\b(oluştur|olustur|aç|ac)\b"
+    r"|\b(bakım kaydı oluştur|bakim kaydi olustur|ticket oluştur|ticket olustur)\b",
     re.IGNORECASE,
 )
 
@@ -38,16 +43,22 @@ Use the available tools when the user's request requires:
 - current operational data, or
 - an action in an enterprise system.
 
+The user request may be in English or Turkish. Always call the English tool
+names exactly as exposed (get_asset_status, get_maintenance_history,
+create_maintenance_ticket). Do not invent localized tool names.
+
 Rules:
 - Do not invent operational data.
 - Select the tool that best matches the user's request.
 - Use tool results as the source of truth.
 - After receiving the tool result, answer clearly and concisely.
-- If the user asks to create, open, or request a maintenance ticket,
+- If the user asks to create, open, or request a maintenance ticket
+  (including Turkish: oluştur / aç / bakım kaydı),
   always select create_maintenance_ticket.
 - A ticket creation request must never be answered without selecting
   create_maintenance_ticket.
-- If the user asks for the current status of a specific asset,
+- If the user asks for the current status of a specific asset
+  (including Turkish: güncel durum / durumu nedir),
   select get_asset_status.
 - Always include tenant_slug exactly as provided in the system context
   when calling tools (the host also injects it).
@@ -58,6 +69,7 @@ READ_ONLY_SYSTEM_PROMPT = """
 You are an enterprise operations assistant gathering LIVE READ evidence only.
 
 Available tools are read-only. You must NOT create tickets or perform writes.
+The user request may be in English or Turkish; call English tool names only.
 
 Rules:
 - Do not invent operational data.
@@ -73,10 +85,12 @@ Rules:
 WRITE_ONLY_SYSTEM_PROMPT = """
 You are preparing an allowlisted maintenance write action.
 
-The user explicitly requested creating/opening a maintenance ticket.
+The user explicitly requested creating/opening a maintenance ticket
+(English or Turkish phrasing).
 You MUST select create_maintenance_ticket.
 Fill asset_code, issue, and priority from the user request.
-Priority must be one of: low, medium, high.
+Priority must be one of: low, medium, high (map Turkish yüksek/orta/düşük
+to high/medium/low when needed).
 Always include tenant_slug from the system context.
 Call exactly one tool: create_maintenance_ticket.
 """.strip()
@@ -349,10 +363,18 @@ async def mcp_tool_node(state: AgentState) -> dict:
                 "system",
                 (
                     "Summarize the MCP tool result for the user clearly and concisely. "
-                    "Do not call tools. Do not invent data beyond the JSON result."
+                    "Do not call tools. Do not invent data beyond the JSON result. "
+                    "Write the entire answer in the requested response language."
                 ),
             ),
-            ("human", f"User question:\n{query}\n\nTool result JSON:\n{json.dumps(tool_result)}"),
+            (
+                "human",
+                (
+                    f"{format_response_language_instruction(state.get('response_language'))}\n\n"
+                    f"User question:\n{query}\n\n"
+                    f"Tool result JSON:\n{json.dumps(tool_result)}"
+                ),
+            ),
         ]
     )
 

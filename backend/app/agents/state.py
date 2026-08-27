@@ -7,10 +7,12 @@ AgentRoute = Literal[
     "knowledge",
     "sql",
     "tool",
+    "external_risk_assessment",
     "unsupported",
 ]
 RetrievalMode = Literal["standard", "advanced"]
-ReadCapability = Literal["knowledge", "sql", "tool"]
+ReadCapability = Literal["knowledge", "sql", "tool", "external_risk_assessment"]
+ResponseLanguage = Literal["en", "tr"]
 
 
 class AgentState(TypedDict, total=False):
@@ -18,6 +20,7 @@ class AgentState(TypedDict, total=False):
     tenant_slug: str
     query: str
     retrieval_mode: RetrievalMode
+    response_language: ResponseLanguage
 
     requires_approval: bool
     pending_action: dict
@@ -37,7 +40,13 @@ class AgentState(TypedDict, total=False):
     rag_answer: str
     tool_answer: str
     sql_answer: str
+    a2a_answer: str
     synthesis_answer: str
     final_answer: str
+
+    # A2A structured evidence (dict payloads from Pydantic model_dump).
+    a2a_intelligence_evidence: dict[str, Any]
+    a2a_risk_result: dict[str, Any]
+    a2a_follow_up_task: dict[str, Any]
 
     execution_details: Annotated[dict[str, Any], merge_execution_details]
