@@ -73,13 +73,19 @@ def _response_from_result(
     interrupts = result.get("__interrupt__")
 
     if interrupts:
+        approval_answer = result.get("tool_answer") or ""
+        a2a_answer = (result.get("a2a_answer") or "").strip()
+        if a2a_answer and approval_answer:
+            approval_answer = f"{a2a_answer}\n\n{approval_answer}"
+        elif a2a_answer:
+            approval_answer = a2a_answer
         return AgentResponse(
             thread_id=thread_id,
             status="approval_required",
             route=result["route"],
             planned_routes=planned,
             requires_synthesis=result.get("requires_synthesis"),
-            answer=result["tool_answer"],
+            answer=approval_answer,
             pending_action=result["pending_action"],
             execution_details=details,
         )

@@ -537,3 +537,37 @@ async def test_evaluator_preflight_fails_before_ai(monkeypatch):
         await eval_mod.preflight_required_tenants(
             [{"tenant_slug": "atlas-manufacturing", "expected_route": "knowledge"}]
         )
+
+
+@pytest.mark.asyncio
+async def test_answer_with_sql_soft_fails_when_repair_still_unsafe(monkeypatch):
+    async def fake_generate(question: str) -> str:
+        return (
+            "SELECT c.company_name FROM companies AS c "
+            "WHERE c.tenant_id = :tenant_id "
+            "AND (c.company_name = 'Microsoft' OR c.domain = 'microsoft.com')"
+        )
+
+    async def fake_repair(question: str, rejected_sql: str, validation_error: str) -> str:
+        assert "OR" in validation_error
+        return (
+            "SELECT c.company_name FROM companies AS c "
+            "WHERE c.tenant_id = :tenant_id "
+            "AND (c.company_name = 'Microsoft' OR c.official_name = 'Microsoft')"
+        )
+
+    async def fail_execute(*, tenant_id, sql):
+        raise AssertionError("execute must not run for unsafe SQL")
+
+    monkeypatch.setattr("app.services.sql_agent_service.generate_sql", fake_generate)
+    monkeypatch.setattr("app.services.sql_agent_service.repair_sql", fake_repair)
+    monkeypatch.setattr("app.services.sql_agent_service.execute_readonly_sql", fail_execute)
+
+    result = await answer_with_sql(
+        tenant_id=uuid4(),
+        question="Microsoft risk?",
+        response_language="en",
+    )
+    assert result.validation_status == "failed"
+    assert result.row_count == 0
+    assert "safety rules" in result.answer.lower()

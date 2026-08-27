@@ -52,6 +52,17 @@ def after_capability(state: AgentState) -> str:
     return "finalize"
 
 
+def route_after_a2a(state: AgentState) -> str:
+    """A2A may request HITL for high-risk GitHub escalation."""
+
+    # Composite paths synthesize first; HITL runs after (see after_synthesize).
+    if state.get("requires_synthesis"):
+        return "synthesize"
+    if state.get("requires_approval"):
+        return "approval"
+    return "finalize"
+
+
 def route_after_tool(state: AgentState) -> str:
     if state.get("requires_approval"):
         return "approval"
@@ -67,6 +78,9 @@ def route_after_approval(state: AgentState) -> str:
 
 
 def after_synthesize(state: AgentState) -> str:
+    # High-risk A2A may set requires_approval while also synthesizing.
+    if state.get("requires_approval"):
+        return "approval"
     if state.get("may_require_write"):
         return "write_gate"
     return "finalize"
@@ -81,16 +95,30 @@ def after_write_gate(state: AgentState) -> str:
 def finalize_node(state: AgentState) -> dict:
     from app.agents.execution_trace import node_trace
 
+    a2a_answer = (state.get("a2a_answer") or "").strip()
+
     # Explicit reject/approve outcomes from HITL take precedence over synthesis.
     if state.get("approval_granted") is False and state.get("tool_answer"):
+        reject_note = state["tool_answer"]
+        if a2a_answer:
+            return {
+                "final_answer": f"{a2a_answer}\n\n{reject_note}",
+                **node_trace("finalize"),
+            }
         return {
-            "final_answer": state["tool_answer"],
+            "final_answer": reject_note,
             **node_trace("finalize"),
         }
 
     if state.get("action_result") and state.get("tool_answer"):
+        action_note = state["tool_answer"]
+        if a2a_answer:
+            return {
+                "final_answer": f"{a2a_answer}\n\n{action_note}",
+                **node_trace("finalize"),
+            }
         return {
-            "final_answer": state["tool_answer"],
+            "final_answer": action_note,
             **node_trace("finalize"),
         }
 
@@ -121,6 +149,12 @@ def finalize_node(state: AgentState) -> dict:
         }
 
     if route == "external_risk_assessment":
+        # Waiting for HITL: surface assessment + approval message.
+        if state.get("requires_approval") and state.get("tool_answer") and a2a_answer:
+            return {
+                "final_answer": f"{a2a_answer}\n\n{state['tool_answer']}",
+                **node_trace("finalize"),
+            }
         return {
             "final_answer": state["a2a_answer"],
             **node_trace("finalize"),
@@ -191,8 +225,9 @@ def build_agent_graph():
     )
     graph_builder.add_conditional_edges(
         "a2a_risk",
-        after_capability,
+        route_after_a2a,
         {
+            "approval": "approval",
             "synthesize": "synthesize",
             "finalize": "finalize",
         },

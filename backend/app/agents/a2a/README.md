@@ -50,3 +50,9 @@ On the **single-route** path the node also loads RAG context (contracts /
 account reviews) so Risk Agent sees SQL + RAG + public web evidence.
 When `knowledge` is already planned (composite), RAG is left to the parallel
 `rag` node / synthesis path.
+
+## High risk → HITL → GitHub
+
+If `risk_level == high`, `a2a_risk_node` sets `pending_action` for
+`create_github_issue` and interrupts for human approval. Approve runs MCP
+(real GitHub Issue) + SQL audit/link; reject performs no external write.

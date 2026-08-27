@@ -118,8 +118,9 @@ Rules:
 - Never assume that tenant scope propagates through a JOIN.
 - Never use OR in the WHERE clause. Prefer AND and IN (...) instead.
 - Prefer simple alias names such as a, mr, mt, c, cr, t, p.
-- For company questions, resolve the entity via companies.company_name,
-  companies.official_name, companies.domain, or companies.internal_customer_id.
+- For company questions, resolve the entity with ONE equality on
+  companies.company_name (e.g. c.company_name = 'Microsoft').
+  Do NOT OR across company_name / official_name / domain / aliases.
   Never invent a company row or mix up similarly named companies.
 - Turkish examples of intent mapping (still use English identifiers in SQL):
   "uyarı" / "warning" → status or issue filters as appropriate
@@ -183,6 +184,8 @@ Hard requirements:
   (maintenance_records.tenant_id is INVALID if the alias is mr).
 - Put every tenant predicate in the WHERE clause. JOIN ON alone is not enough.
 - Never use OR; rewrite with AND / IN (...)
+- For company entity filters, use a single c.company_name = '...' predicate
+  (do not OR official_name / domain / aliases)
 - Keep :tenant_id as the only tenant bind parameter
 - Do not invent tables or columns
 - Return only repaired SQL through structured output
