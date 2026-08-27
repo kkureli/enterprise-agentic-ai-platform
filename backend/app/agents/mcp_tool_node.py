@@ -29,7 +29,8 @@ WRITE_INTENT_RE = re.compile(
     r"\b(create|open|request|file|raise)\b.*\b(ticket|maintenance ticket)\b"
     r"|\b(ticket)\b.*\b(create|open)\b"
     r"|\buse the enterprise system to create\b"
-    r"|\b(oluştur|olustur|aç|ac)\b.*\b(bilet|ticket|bakım kaydı|bakim kaydi|bakım bileti|bakim bileti)\b"
+    r"|\b(oluştur|olustur|aç|ac)\b.*\b(bilet|ticket|bakım kaydı|bakim kaydi|"
+    r"bakım bileti|bakim bileti)\b"
     r"|\b(bilet|ticket|bakım kaydı|bakim kaydi)\b.*\b(oluştur|olustur|aç|ac)\b"
     r"|\b(bakım kaydı oluştur|bakim kaydi olustur|ticket oluştur|ticket olustur)\b",
     re.IGNORECASE,

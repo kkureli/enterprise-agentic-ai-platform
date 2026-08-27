@@ -32,7 +32,10 @@ async def fetch_wikipedia_summary(title: str) -> EvidenceItem | None:
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
             response = await client.get(
                 url,
-                headers={"Accept": "application/json", "User-Agent": "enterprise-agentic-ai-platform/1.0"},
+                headers={
+                    "Accept": "application/json",
+                    "User-Agent": "enterprise-agentic-ai-platform/1.0",
+                },
             )
         if response.status_code != 200:
             return None

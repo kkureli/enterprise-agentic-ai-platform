@@ -138,10 +138,12 @@ Examples:
 → routes=["external_risk_assessment"], requires_synthesis=false, may_require_write=false
 
 "Evaluate Spotify using internal data, contract terms, and current external risks."
-→ routes=["sql","knowledge","external_risk_assessment"], requires_synthesis=true, may_require_write=false
+→ routes=["sql","knowledge","external_risk_assessment"], requires_synthesis=true,
+  may_require_write=false
 
 "Spotify'ın iç verilerini, sözleşmesini ve güncel dış risklerini değerlendir."
-→ routes=["sql","knowledge","external_risk_assessment"], requires_synthesis=true, may_require_write=false
+→ routes=["sql","knowledge","external_risk_assessment"], requires_synthesis=true,
+  may_require_write=false
 
 "What is MACHINE-42's current status?"
 → routes=["tool"], requires_synthesis=false, may_require_write=false

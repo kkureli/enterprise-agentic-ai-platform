@@ -10,6 +10,7 @@ from langchain_core.outputs import LLMResult
 
 from app.core.config import settings
 from app.schemas.execution import (
+    A2aDetails,
     CacheDetails,
     CostDetails,
     ExecutionDetails,
@@ -20,7 +21,6 @@ from app.schemas.execution import (
     SqlDetails,
     TimingDetails,
     ToolDetails,
-    A2aDetails,
 )
 
 

@@ -7,7 +7,6 @@ from pathlib import Path
 
 from app.agents.router import PLANNER_SYSTEM_PROMPT, READ_ROUTES, normalize_planned_routes
 
-
 GOLDEN_PATH = (
     Path(__file__).resolve().parents[2] / "evals" / "agent" / "golden_dataset.json"
 )

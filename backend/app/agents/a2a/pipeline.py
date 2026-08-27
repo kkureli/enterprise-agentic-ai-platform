@@ -63,7 +63,8 @@ def _format_risk_answer(
             lines.extend(f"- {action}" for action in risk.recommended_actions)
         if follow_up_used:
             lines.append(
-                "Not: Risk Agent, Company Intelligence Agent'a A2A follow-up research görevi gönderdi."
+                "Not: Risk Agent, Company Intelligence Agent'a "
+                "A2A follow-up research görevi gönderdi."
             )
         if intelligence and intelligence.entity.company_name:
             lines.append(
@@ -128,7 +129,8 @@ async def run_a2a_external_risk_pipeline(
     )
     if intelligence.entity.unresolved:
         message = (
-            f"{resolved_company} için entity resolution başarısız; yanlış şirket araştırması yapılmadı."
+            f"{resolved_company} için entity resolution başarısız; "
+            "yanlış şirket araştırması yapılmadı."
             if response_language == "tr"
             else (
                 f"Entity resolution failed for {resolved_company}; "

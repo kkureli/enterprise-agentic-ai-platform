@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 
 from app.agents.execution_trace import node_trace
 from app.agents.state import AgentState
-from app.services.llm_service import get_chat_model
 from app.services.language_detection import format_response_language_instruction
+from app.services.llm_service import get_chat_model
 
 SYNTHESIS_SYSTEM_PROMPT = """
 You synthesize grounded evidence from multiple enterprise capabilities into one
